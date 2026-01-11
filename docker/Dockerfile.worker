@@ -24,7 +24,7 @@ WORKDIR /app
 COPY vgap/ ./vgap/
 
 # Install Python dependencies and the application
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir .
 
