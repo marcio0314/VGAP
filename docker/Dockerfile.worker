@@ -1,0 +1,41 @@
+# VGAP Celery Worker Container
+FROM python:3.11-slim AS python-base
+
+LABEL maintainer="VGAP Development Team"
+LABEL description="VGAP Celery Worker"
+LABEL version="0.1.0"
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python dependencies
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir .
+
+# Copy application code
+COPY vgap/ ./vgap/
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash vgap && \
+    chown -R vgap:vgap /app
+
+# Create data directories
+RUN mkdir -p /data/uploads /data/results /data/temp && \
+    chown -R vgap:vgap /data
+
+USER vgap
+
+# Run Celery worker
+CMD ["celery", "-A", "vgap.worker", "worker", "--loglevel=info", "--concurrency=4"]

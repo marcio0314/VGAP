@@ -1,0 +1,160 @@
+# VGAP Development Docker Compose
+# Local development environment with all services
+
+services:
+  # ==========================================================================
+  # DATABASE
+  # ==========================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: vgap-postgres
+    environment:
+      POSTGRES_USER: vgap
+      POSTGRES_PASSWORD: vgap_dev_password
+      POSTGRES_DB: vgap
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U vgap" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ==========================================================================
+  # REDIS (Message Broker & Cache)
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: vgap-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ==========================================================================
+  # API SERVER
+  # ==========================================================================
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: vgap-api
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://vgap:vgap_dev_password@postgres:5432/vgap
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - SECRET_KEY=dev-secret-key-change-in-production-minimum-32-chars
+      - API_DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - DATA_DIR=/data
+    volumes:
+      - ../vgap:/app/vgap:ro # Mount source for development
+      - vgap_data:/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ==========================================================================
+  # CELERY WORKER
+  # ==========================================================================
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    container_name: vgap-worker
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://vgap:vgap_dev_password@postgres:5432/vgap
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - DATA_DIR=/data
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ../vgap:/app/vgap:ro
+      - vgap_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock # For running bio containers
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ==========================================================================
+  # CELERY FLOWER (Task Monitor)
+  # ==========================================================================
+  flower:
+    image: mher/flower:2.0
+    container_name: vgap-flower
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - FLOWER_PORT=5555
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # ==========================================================================
+  # PROMETHEUS (Metrics)
+  # ==========================================================================
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: vgap-prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  # ==========================================================================
+  # GRAFANA (Dashboards)
+  # ==========================================================================
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: vgap-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  vgap_data:
+  prometheus_data:
+  grafana_data:
+
+
+networks:
+  default:
+    name: vgap-network

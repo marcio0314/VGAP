@@ -1,0 +1,198 @@
+# VGAP Bioinformatics Tools Container
+# Contains all bioinformatics tools for viral genome analysis
+
+FROM ubuntu:22.04 AS base
+
+LABEL maintainer="VGAP Development Team"
+LABEL description="Bioinformatics tools for viral genomics analysis"
+LABEL version="0.1.0"
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Set locale
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    curl \
+    wget \
+    git \
+    unzip \
+    bzip2 \
+    gzip \
+    pigz \
+    zlib1g-dev \
+    libbz2-dev \
+    liblzma-dev \
+    libncurses5-dev \
+    libncursesw5-dev \
+    libcurl4-openssl-dev \
+    libssl-dev \
+    python3 \
+    python3-pip \
+    python3-dev \
+    openjdk-11-jre-headless \
+    autoconf \
+    automake \
+    libtool \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create tools directory
+WORKDIR /opt/tools
+
+# =============================================================================
+# FASTP - Quality Control and Trimming
+# =============================================================================
+ARG FASTP_VERSION=0.23.4
+RUN wget -q https://github.com/OpenGene/fastp/archive/v${FASTP_VERSION}.tar.gz && \
+    tar xzf v${FASTP_VERSION}.tar.gz && \
+    cd fastp-${FASTP_VERSION} && \
+    make -j$(nproc) && \
+    make install && \
+    cd .. && rm -rf fastp-${FASTP_VERSION} v${FASTP_VERSION}.tar.gz
+
+# =============================================================================
+# SAMTOOLS & HTSLIB
+# =============================================================================
+ARG SAMTOOLS_VERSION=1.19
+RUN wget -q https://github.com/samtools/samtools/releases/download/${SAMTOOLS_VERSION}/samtools-${SAMTOOLS_VERSION}.tar.bz2 && \
+    tar xjf samtools-${SAMTOOLS_VERSION}.tar.bz2 && \
+    cd samtools-${SAMTOOLS_VERSION} && \
+    ./configure --prefix=/usr/local && \
+    make -j$(nproc) && \
+    make install && \
+    cd .. && rm -rf samtools-${SAMTOOLS_VERSION} samtools-${SAMTOOLS_VERSION}.tar.bz2
+
+# =============================================================================
+# BCFTOOLS
+# =============================================================================
+ARG BCFTOOLS_VERSION=1.19
+RUN wget -q https://github.com/samtools/bcftools/releases/download/${BCFTOOLS_VERSION}/bcftools-${BCFTOOLS_VERSION}.tar.bz2 && \
+    tar xjf bcftools-${BCFTOOLS_VERSION}.tar.bz2 && \
+    cd bcftools-${BCFTOOLS_VERSION} && \
+    ./configure --prefix=/usr/local && \
+    make -j$(nproc) && \
+    make install && \
+    cd .. && rm -rf bcftools-${BCFTOOLS_VERSION} bcftools-${BCFTOOLS_VERSION}.tar.bz2
+
+# =============================================================================
+# MINIMAP2
+# =============================================================================
+ARG MINIMAP2_VERSION=2.26
+RUN wget -q https://github.com/lh3/minimap2/releases/download/v${MINIMAP2_VERSION}/minimap2-${MINIMAP2_VERSION}_x64-linux.tar.bz2 && \
+    tar xjf minimap2-${MINIMAP2_VERSION}_x64-linux.tar.bz2 && \
+    cp minimap2-${MINIMAP2_VERSION}_x64-linux/minimap2 /usr/local/bin/ && \
+    rm -rf minimap2-${MINIMAP2_VERSION}_x64-linux.tar.bz2 minimap2-${MINIMAP2_VERSION}_x64-linux
+
+# =============================================================================
+# BWA-MEM2
+# =============================================================================
+ARG BWA_MEM2_VERSION=2.2.1
+RUN wget -q https://github.com/bwa-mem2/bwa-mem2/releases/download/v${BWA_MEM2_VERSION}/bwa-mem2-${BWA_MEM2_VERSION}_x64-linux.tar.bz2 && \
+    tar xjf bwa-mem2-${BWA_MEM2_VERSION}_x64-linux.tar.bz2 && \
+    cp bwa-mem2-${BWA_MEM2_VERSION}_x64-linux/bwa-mem2* /usr/local/bin/ && \
+    rm -rf bwa-mem2-${BWA_MEM2_VERSION}_x64-linux.tar.bz2 bwa-mem2-${BWA_MEM2_VERSION}_x64-linux
+
+# =============================================================================
+# IVAR
+# =============================================================================
+ARG IVAR_VERSION=1.4.2
+RUN wget -q https://github.com/andersen-lab/ivar/archive/v${IVAR_VERSION}.tar.gz && \
+    tar xzf v${IVAR_VERSION}.tar.gz && \
+    cd ivar-${IVAR_VERSION} && \
+    ./autogen.sh && \
+    ./configure --prefix=/usr/local && \
+    make -j$(nproc) && \
+    make install && \
+    cd .. && rm -rf ivar-${IVAR_VERSION} v${IVAR_VERSION}.tar.gz
+
+# =============================================================================
+# LOFREQ
+# =============================================================================
+ARG LOFREQ_VERSION=2.1.5
+RUN wget -q https://github.com/CSB5/lofreq/raw/master/dist/lofreq_star-${LOFREQ_VERSION}_linux-x86-64.tgz && \
+    tar xzf lofreq_star-${LOFREQ_VERSION}_linux-x86-64.tgz && \
+    cp lofreq_star-${LOFREQ_VERSION}/bin/lofreq /usr/local/bin/ && \
+    rm -rf lofreq_star-${LOFREQ_VERSION}_linux-x86-64.tgz lofreq_star-${LOFREQ_VERSION}
+
+# =============================================================================
+# MAFFT
+# =============================================================================
+ARG MAFFT_VERSION=7.520
+RUN wget -q https://mafft.cbrc.jp/alignment/software/mafft-${MAFFT_VERSION}-linux.tgz && \
+    tar xzf mafft-${MAFFT_VERSION}-linux.tgz && \
+    cd mafft-linux64 && \
+    cp mafft.bat /usr/local/bin/mafft && \
+    cp -r mafftdir /usr/local/ && \
+    cd .. && rm -rf mafft-${MAFFT_VERSION}-linux.tgz mafft-linux64
+
+# =============================================================================
+# IQ-TREE
+# =============================================================================
+ARG IQTREE_VERSION=2.2.6
+RUN wget -q https://github.com/iqtree/iqtree2/releases/download/v${IQTREE_VERSION}/iqtree-${IQTREE_VERSION}-Linux.tar.gz && \
+    tar xzf iqtree-${IQTREE_VERSION}-Linux.tar.gz && \
+    cp iqtree-${IQTREE_VERSION}-Linux/bin/iqtree2 /usr/local/bin/ && \
+    rm -rf iqtree-${IQTREE_VERSION}-Linux.tar.gz iqtree-${IQTREE_VERSION}-Linux
+
+# =============================================================================
+# SPADES (for de novo assembly)
+# =============================================================================
+ARG SPADES_VERSION=3.15.5
+RUN wget -q https://github.com/ablab/spades/releases/download/v${SPADES_VERSION}/SPAdes-${SPADES_VERSION}-Linux.tar.gz && \
+    tar xzf SPAdes-${SPADES_VERSION}-Linux.tar.gz && \
+    cp -r SPAdes-${SPADES_VERSION}-Linux/bin/* /usr/local/bin/ && \
+    cp -r SPAdes-${SPADES_VERSION}-Linux/share/* /usr/local/share/ && \
+    rm -rf SPAdes-${SPADES_VERSION}-Linux.tar.gz SPAdes-${SPADES_VERSION}-Linux
+
+# =============================================================================
+# MEGAHIT (alternative assembler)
+# =============================================================================
+ARG MEGAHIT_VERSION=1.2.9
+RUN wget -q https://github.com/voutcn/megahit/releases/download/v${MEGAHIT_VERSION}/MEGAHIT-${MEGAHIT_VERSION}-Linux-x86_64-static.tar.gz && \
+    tar xzf MEGAHIT-${MEGAHIT_VERSION}-Linux-x86_64-static.tar.gz && \
+    cp MEGAHIT-${MEGAHIT_VERSION}-Linux-x86_64-static/bin/* /usr/local/bin/ && \
+    rm -rf MEGAHIT-${MEGAHIT_VERSION}-Linux-x86_64-static.tar.gz MEGAHIT-${MEGAHIT_VERSION}-Linux-x86_64-static
+
+# =============================================================================
+# PYTHON BIOINFORMATICS TOOLS
+# =============================================================================
+RUN pip3 install --no-cache-dir \
+    biopython==1.83 \
+    pysam==0.22.0 \
+    pandas==2.1.4 \
+    numpy==1.26.3 \
+    pangolin==4.3 \
+    treetime==0.11.3 \
+    nextclade==3.5.0
+
+# =============================================================================
+# VERIFICATION SCRIPT
+# =============================================================================
+COPY docker/verify_tools.sh /usr/local/bin/verify-tools
+RUN chmod +x /usr/local/bin/verify-tools
+
+# Create working directories
+RUN mkdir -p /data /work
+
+WORKDIR /work
+
+# Set tool versions as environment variables for provenance
+ENV FASTP_VERSION=${FASTP_VERSION}
+ENV SAMTOOLS_VERSION=${SAMTOOLS_VERSION}
+ENV BCFTOOLS_VERSION=${BCFTOOLS_VERSION}
+ENV MINIMAP2_VERSION=${MINIMAP2_VERSION}
+ENV BWA_MEM2_VERSION=${BWA_MEM2_VERSION}
+ENV IVAR_VERSION=${IVAR_VERSION}
+ENV LOFREQ_VERSION=${LOFREQ_VERSION}
+ENV MAFFT_VERSION=${MAFFT_VERSION}
+ENV IQTREE_VERSION=${IQTREE_VERSION}
+ENV SPADES_VERSION=${SPADES_VERSION}
+ENV MEGAHIT_VERSION=${MEGAHIT_VERSION}
+
+CMD ["bash"]
