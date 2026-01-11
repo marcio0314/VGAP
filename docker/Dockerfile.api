@@ -21,12 +21,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Install Python dependencies
+# Copy application code
+COPY vgap/ ./vgap/
+
+# Install Python dependencies and the application
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir .
-
-# Copy application code
-COPY vgap/ ./vgap/
 
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash vgap && \
