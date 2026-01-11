@@ -1,8 +1,7 @@
 # VGAP - Viral Genomics Analysis Platform
 
-[![CI](https://github.com/vgap/vgap/workflows/CI/badge.svg)](https://github.com/vgap/vgap/actions)
-[![Coverage](https://codecov.io/gh/vgap/vgap/branch/main/graph/badge.svg)](https://codecov.io/gh/vgap/vgap)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CI](https://github.com/marcio0314/VGAP/workflows/CI/badge.svg)](https://github.com/marcio0314/VGAP/actions)
+[![Coverage](https://codecov.io/gh/marcio0314/VGAP/branch/main/graph/badge.svg)](https://codecov.io/gh/marcio0314/VGAP)
 
 A production-grade, end-to-end platform for viral genomics focused on RNA and DNA respiratory viruses using Illumina paired-end sequencing data.
 
@@ -130,18 +129,25 @@ MIN_ALLELE_FREQ=0.5
 - No automatic external data uploads
 - GISAID compliance: explicit user action required
 
-## License
+## Author
 
-MIT License - see [LICENSE](LICENSE) for details.
+**Marcio De Avila Arias, PhD**
+
+## Copyright
+
+Copyright (c) 2026 Marcio De Avila Arias, PhD. All rights reserved.
+
+This software is proprietary. Unauthorized copying, modification, distribution, or use of this software is strictly prohibited without prior written permission from the author.
 
 ## Citation
 
 If you use VGAP in your research, please cite:
 
 ```bibtex
-@software{vgap2024,
+@software{vgap2026,
+  author = {De Avila Arias, Marcio},
   title = {VGAP: Viral Genomics Analysis Platform},
-  year = {2024},
-  url = {https://github.com/vgap/vgap}
+  year = {2026},
+  url = {https://github.com/marcio0314/VGAP}
 }
 ```
