@@ -164,7 +164,7 @@ def process_run(self, run_id: str):
         update_progress(session, run.id, 30, "mapping")
         logger.info("Running mapping pipeline")
         
-        mapper = ReferenceMapper(reference=reference, threads=settings.resources.threads_per_sample)
+        mapper = ReferenceMapper(reference=reference, threads=settings.resources.worker_cpu_limit)
         provenance.add_software("minimap2", "2.26")
         
         if run.mode == "amplicon" and run.primer_scheme:
@@ -341,7 +341,7 @@ def process_run(self, run_id: str):
             update_progress(session, run.id, 80, "phylogenetics")
             logger.info("Building phylogeny")
             
-            phylo_pipeline = PhylogenyPipeline(threads=settings.resources.threads_per_sample)
+            phylo_pipeline = PhylogenyPipeline(threads=settings.resources.worker_cpu_limit)
             provenance.add_software("mafft", "7.520")
             provenance.add_software("iqtree2", "2.2.5")
             provenance.set_seed("iqtree", 12345)
