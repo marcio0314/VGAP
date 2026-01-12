@@ -24,6 +24,10 @@ A production-grade, end-to-end platform for viral genomics focused on RNA and DN
 - 8+ CPU cores, 64GB RAM recommended
 - 100GB+ storage for references and results
 
+### Local Development Mode
+
+**Note:** This version is configured for local scientific use. Authentication is disabled by default for ease of use. A default `admin` user is automatically provisioned.
+
 ### Installation
 
 ```bash
@@ -52,7 +56,7 @@ cd docker && docker compose up -d
 ### Access Points
 
 - **API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/api/docs
+- **Web UI**: http://localhost:3001
 - **Grafana**: http://localhost:3000
 
 ### Running an Analysis
@@ -94,6 +98,12 @@ vgap run \
 7. **Phylogenetics**: MAFFT alignment, IQ-TREE construction, TreeTime dating
 8. **Reporting**: Interactive HTML, PDF export, publication-quality figures
 
+## Key Features
+
+- **No-Auth Local Mode**: Frictionless local development and usage
+- **Master Cleanup**: One-click system maintenance via Admin UI
+- **Run Persistence**: Robust state management even if infrastructure restarts
+
 ## Documentation
 
 - [User Guide](docs/user-guide.md)
@@ -101,33 +111,11 @@ vgap run \
 - [Developer Guide](docs/developer-guide.md)
 - [API Reference](docs/api-reference.md)
 
-## Configuration
-
-Configuration is via environment variables or `.env` file:
-
-```bash
-# Database
-DATABASE_URL=postgresql://vgap:password@localhost:5432/vgap
-
-# Redis
-REDIS_URL=redis://localhost:6379/0
-
-# Security
-SECRET_KEY=your-secret-key-here
-JWT_ALGORITHM=HS256
-
-# Pipeline
-MIN_DEPTH=10
-MIN_ALLELE_FREQ=0.5
-```
-
 ## Security
 
-- TLS encryption for all network traffic
-- JWT-based authentication with RBAC
-- Audit logging of all sensitive operations
-- No automatic external data uploads
-- GISAID compliance: explicit user action required
+- **Local Mode**: Authentication disabled for convenience. Do not expose to public internet.
+- **Audit Logging**: All operations are logged for reproducibility
+- **Data Safety**: Master Cleanup protects critical scientific data
 
 ## Author
 

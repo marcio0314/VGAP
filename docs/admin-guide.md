@@ -51,8 +51,7 @@ Lineage databases must be updated by administrators:
 
 ```bash
 # Via API
-curl -X POST http://localhost:8000/api/v1/admin/databases/pangolin/update \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
+curl -X POST http://localhost:8000/api/v1/admin/databases/pangolin/update
 
 # Via CLI
 vgap admin update-database pangolin
@@ -74,18 +73,43 @@ pg_dump -h localhost -U vgap -d vgap > backup_$(date +%Y%m%d).sql
 psql -h localhost -U vgap -d vgap < backup_20240115.sql
 ```
 
+## System Cleanup (Local Mode)
+
+The Master Cleanup feature allows reclaiming disk space by removing temporary files and regenerable results.
+
+### Via Web UI
+1. Go to **Admin** panel
+2. Select **Maintenance** tab
+3. Click **Scan System** to see what can be deleted
+4. Review the file list and click **Confirm Cleanup**
+
+### Via API
+
+```bash
+# Preview cleanup (Dry run)
+curl http://localhost:8000/api/v1/maintenance/cleanup/preview
+
+# Execute cleanup
+curl -X POST http://localhost:8000/api/v1/maintenance/cleanup/execute \
+  -H "Content-Type: application/json" \
+  -d '{"confirm": true}'
+```
+
+**Note:** Source code, reference databases, and configuration files are protected and will never be deleted.
+
 ## User Management
+
+In Local Mode, a default `admin` user is automatically provided. Additional users can be created for tracking purposes but authentication is permissive.
 
 ### Creating Users
 
 ```bash
-# Via API (admin only)
+# Via API
 curl -X POST http://localhost:8000/api/v1/admin/users \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "analyst@example.com",
-    "password": "secure_password",
+    "password": "local_password",
     "full_name": "Jane Analyst",
     "role": "analyst"
   }'
@@ -97,13 +121,12 @@ curl -X POST http://localhost:8000/api/v1/admin/users \
 |------|-------------|
 | viewer | View runs and results |
 | analyst | Create runs, view results |
-| admin | All + user management + DB updates |
+| admin | All + user management + DB updates + System Cleanup |
 
 ### Deactivating Users
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/admin/users/{id}/deactivate \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
+curl -X POST http://localhost:8000/api/v1/admin/users/{id}/deactivate
 ```
 
 ## Monitoring

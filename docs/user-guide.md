@@ -70,15 +70,8 @@ Required fields:
 ### Using the API
 
 ```bash
-# Login and get token
-TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"password"}' \
-  | jq -r '.access_token')
-
 # Create a run
 curl -X POST http://localhost:8000/api/v1/runs \
-  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "My Analysis",
