@@ -76,7 +76,7 @@ export default function Dashboard() {
                     value={status?.workers_active?.toString() || '0'}
                     icon={Dna}
                     color="primary"
-                    subtitle={status?.status || 'Loading...'}
+                    subtitle={typeof status?.status === 'string' ? status.status : 'Loading...'}
                 />
             </div>
 
@@ -232,15 +232,15 @@ function StatusIndicator({ label, status, subtitle }: {
     return (
         <div className="flex items-center gap-3">
             <div className={`w-3 h-3 rounded-full ${isHealthy
-                    ? 'bg-success-500'
-                    : status === 'warning'
-                        ? 'bg-warning-500'
-                        : 'bg-danger-500'
+                ? 'bg-success-500'
+                : status === 'warning'
+                    ? 'bg-warning-500'
+                    : 'bg-danger-500'
                 }`} />
             <div>
                 <div className="text-sm font-medium">{label}</div>
                 <div className="text-xs text-slate-400 capitalize">
-                    {subtitle || status}
+                    {subtitle || (typeof status === 'string' ? status : JSON.stringify(status))}
                 </div>
             </div>
         </div>
