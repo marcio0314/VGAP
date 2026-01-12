@@ -41,7 +41,17 @@ export default function CreateRun() {
                 samples: samples.map(s => ({
                     r1_filename: s.r1.name,
                     r2_filename: s.r2?.name,
-                    metadata: s.metadata,
+                    metadata: {
+                        sample_id: s.metadata.sample_id,
+                        collection_date: s.metadata.collection_date || new Date().toISOString().split('T')[0],
+                        host: "Homo sapiens",
+                        location: "Unknown",
+                        protocol: mode,
+                        platform: "Illumina",
+                        run_id: "pending", // Backend should overwrite or we use a placeholder
+                        batch_id: "default-batch",
+                        ...s.metadata
+                    },
                 })),
             }
 
