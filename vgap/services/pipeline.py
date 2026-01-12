@@ -256,10 +256,11 @@ def process_run(self, run_id: str):
         update_progress(session, run.id, 55, "variants")
         logger.info("Calling variants")
         
-        if run.mode == "amplicon":
-            caller = IvarVariantCaller(min_depth=settings.pipeline.min_depth)
-        else:
-            caller = BcftoolsVariantCaller(min_depth=settings.pipeline.min_depth)
+        # Use BcftoolsVariantCaller for all modes since ivar is unavailable
+        caller = BcftoolsVariantCaller(
+            min_depth=settings.pipeline.min_depth,
+            min_freq=settings.pipeline.min_variant_freq
+        )
         
         annotator = VariantAnnotator()
         vfilter = VariantFilter(min_depth=settings.pipeline.min_depth, min_minor_freq=0.02)
@@ -278,7 +279,7 @@ def process_run(self, run_id: str):
                 variants_list = caller.call_variants(
                     bam=bam,
                     ref=reference,
-                    output_tsv=variants_dir / "variants.tsv",
+                    output_vcf=variants_dir / "variants.vcf",
                 )
                 
                 # Annotate and filter

@@ -3,6 +3,7 @@ VGAP Mapping Pipeline - Reference mapping and consensus generation.
 """
 
 import subprocess
+import csv
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
@@ -89,7 +90,7 @@ class ReferenceMapper:
 
 
 class PrimerTrimmer:
-    """Trim amplicon primers from aligned reads using ivar."""
+    """Trim amplicon primers using samtools ampliconclip."""
     
     def __init__(self, primer_bed: Path):
         self.primer_bed = primer_bed
@@ -98,58 +99,104 @@ class PrimerTrimmer:
         """Trim primers from BAM file."""
         logger.info("Trimming primers", input_bam=str(input_bam), primer_bed=str(self.primer_bed))
         
+        if not self.primer_bed.exists():
+            raise FileNotFoundError(f"Primer BED file not found: {self.primer_bed}")
+
+        # Use samtools ampliconclip
         cmd = [
-            "ivar", "trim",
-            "-i", str(input_bam),
+            "samtools", "ampliconclip",
             "-b", str(self.primer_bed),
-            "-p", str(output_bam).replace('.bam', ''),
-            "-e",  # Include reads without primers
+            "-o", str(output_bam),
+            "--both-ends",
+            str(input_bam)
         ]
         
-        subprocess.run(cmd, check=True, capture_output=True)
+        subprocess.run(cmd, check=True)
         
-        # Sort and index the output
-        sorted_bam = output_bam
-        subprocess.run([
-            "samtools", "sort",
-            "-o", str(sorted_bam),
-            str(output_bam).replace('.bam', '.bam')
-        ], check=True)
-        subprocess.run(["samtools", "index", str(sorted_bam)], check=True)
-        
-        return sorted_bam
+        # Index
+        subprocess.run(["samtools", "index", str(output_bam)], check=True)
+        return output_bam
 
 
 class ConsensusGenerator:
-    """Generate consensus sequence."""
+    """Generate consensus sequence using bcftools."""
     
     def __init__(self, min_depth: int = 10, min_af: float = 0.5):
         self.min_depth = min_depth
         self.min_af = min_af
+
+    def _generate_mask(self, bam: Path, mask_bed: Path):
+        """Generate BED file of low coverage regions."""
+        cmd = ["samtools", "depth", "-a", str(bam)]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        
+        with open(mask_bed, 'w') as f:
+            for line in result.stdout.splitlines():
+                parts = line.split('\t')
+                if not parts: continue
+                chrom = parts[0]
+                pos = int(parts[1]) # 1-based
+                depth = int(parts[2])
+                
+                if depth < self.min_depth:
+                    # BED is 0-based start, 1-based end
+                    f.write(f"{chrom}\t{pos-1}\t{pos}\n")
     
     def generate(self, bam: Path, ref: Path, output: Path) -> ConsensusResult:
-        """Generate consensus using ivar."""
-        prefix = str(output).replace('.fa', '')
+        """Generate consensus using bcftools."""
+        prefix = str(output.parent / output.stem)
+        vcf_file = Path(prefix + ".vcf.gz")
+        mask_file = Path(prefix + ".mask.bed")
         
-        mpileup = ["samtools", "mpileup", "-aa", "-A", "-d", "0", "-Q", "20",
-                   "--reference", str(ref), str(bam)]
-        ivar = ["ivar", "consensus", "-p", prefix, "-t", str(self.min_af),
-                "-m", str(self.min_depth), "-n", "N"]
+        # 1. Generate Variants (VCF)
+        mpileup_cmd = [
+            "bcftools", "mpileup",
+            "-Ou",
+            "-f", str(ref),
+            "-d", "10000",
+            "-Q", "20",
+            "-a", "FORMAT/DP,FORMAT/AD",
+            str(bam)
+        ]
         
-        p1 = subprocess.Popen(mpileup, stdout=subprocess.PIPE)
-        p2 = subprocess.Popen(ivar, stdin=p1.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        call_cmd = [
+            "bcftools", "call",
+            "--ploidy", "1",
+            "-mv", 
+            "-Oz",
+            "-o", str(vcf_file)
+        ]
+        
+        p1 = subprocess.Popen(mpileup_cmd, stdout=subprocess.PIPE)
+        p2 = subprocess.Popen(call_cmd, stdin=p1.stdout)
         p1.stdout.close()
         p2.communicate(timeout=3600)
         
-        Path(prefix + ".fa").rename(output)
+        subprocess.run(["bcftools", "index", str(vcf_file)], check=True)
         
+        # 2. Generate Low Depth Mask
+        self._generate_mask(bam, mask_file)
+        
+        # 3. Apply Consensus
+        # Apply variants and mask low depth regions with N
+        cons_cmd = [
+            "bcftools", "consensus",
+            "-f", str(ref),
+            "-m", str(mask_file),
+            str(vcf_file),
+            "-o", str(output)
+        ]
+        
+        subprocess.run(cons_cmd, check=True)
+        
+        # Calculate stats
         with open(output) as f:
             seq = ''.join(l.strip() for l in f.readlines()[1:])
-        
+            
         import hashlib
         with open(output, 'rb') as f:
             checksum = hashlib.sha256(f.read()).hexdigest()
-        
+            
         return ConsensusResult(
             fasta_path=output,
             sequence_length=len(seq),
