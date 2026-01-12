@@ -29,6 +29,10 @@ class RunStatus(str, Enum):
 class SampleStatus(str, Enum):
     PENDING = "pending"
     PROCESSING = "processing"
+    QC_COMPLETE = "qc_complete"
+    MAPPING_COMPLETE = "mapping_complete"
+    VARIANTS_COMPLETE = "variants_complete"
+    COMPLETE = "complete"
     COMPLETED = "completed"
     FAILED = "failed"
     SKIPPED = "skipped"
