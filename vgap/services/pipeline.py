@@ -263,7 +263,7 @@ def process_run(self, run_id: str):
             caller = BcftoolsVariantCaller(min_depth=settings.pipeline.min_depth)
         
         annotator = VariantAnnotator()
-        vfilter = VariantFilter(min_depth=settings.pipeline.min_depth, min_af=0.02)
+        vfilter = VariantFilter(min_depth=settings.pipeline.min_depth, min_minor_freq=0.02)
         
         for sample in samples:
             sample_dir = output_dir / sample.sample_id
