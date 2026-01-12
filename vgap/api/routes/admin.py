@@ -437,7 +437,7 @@ async def get_system_status(
     
     # Redis check
     try:
-        r = redis.from_url(settings.redis.url)
+        r = redis.from_url(str(settings.redis.url))
         r.ping()
         redis_healthy = True
     except Exception:
@@ -445,7 +445,7 @@ async def get_system_status(
     
     # Worker check
     try:
-        inspect = celery_app.control.inspect()
+        inspect = celery_app.control.inspect(timeout=1.0)
         active = inspect.active() or {}
         workers = list(active.keys())
         workers_healthy = len(workers) > 0
