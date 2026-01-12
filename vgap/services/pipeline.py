@@ -241,9 +241,8 @@ def process_run(self, run_id: str):
             try:
                 consensus = consensus_gen.generate(
                     bam=bam,
-                    reference=reference,
-                    output_fasta=consensus_dir / "consensus.fasta",
-                    sample_id=sample.sample_id,
+                    ref=reference,
+                    output=consensus_dir / "consensus.fasta",
                 )
                 all_consensus.append(consensus)
             except Exception as e:
@@ -276,15 +275,15 @@ def process_run(self, run_id: str):
                 bam = mapping_dir / f"{sample.sample_id}.bam"
             
             try:
-                vcf = caller.call_variants(
+                variants_list = caller.call_variants(
                     bam=bam,
-                    reference=reference,
-                    output_vcf=variants_dir / "variants.vcf",
+                    ref=reference,
+                    output_tsv=variants_dir / "variants.tsv",
                 )
                 
                 # Annotate and filter
-                variants = annotator.annotate(vcf, reference)
-                filtered = vfilter.filter(variants)
+                annotated = annotator.annotate(variants_list)
+                filtered = vfilter.filter(annotated)
                 
                 import json
                 with open(variants_dir / "variants.json", "w") as f:

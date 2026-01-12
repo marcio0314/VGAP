@@ -10,12 +10,40 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-# Install system dependencies
+# Install system dependencies and bioinformatics tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
+    wget \
     libpq-dev \
+    libz-dev \
+    libbz2-dev \
+    liblzma-dev \
+    libcurl4-gnutls-dev \
+    libssl-dev \
+    libncurses5-dev \
+    autoconf \
+    automake \
     && rm -rf /var/lib/apt/lists/*
+
+# Install bioinformatics tools from conda-forge (miniconda)
+RUN wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-$(uname -m).sh -O /tmp/miniconda.sh && \
+    bash /tmp/miniconda.sh -b -p /opt/conda && \
+    rm /tmp/miniconda.sh && \
+    /opt/conda/bin/conda install -y -c bioconda -c conda-forge \
+    fastp=0.23.4 \
+    minimap2=2.26 \
+    samtools=1.19 \
+    bcftools=1.19 \
+    ivar=1.4.2 \
+    mafft=7.520 \
+    iqtree=2.2.5 \
+    nextclade=3.0.0 \
+    pangolin=4.3 \
+    && /opt/conda/bin/conda clean -afy
+
+# Add conda to PATH
+ENV PATH="/opt/conda/bin:$PATH"
 
 WORKDIR /app
 
