@@ -60,7 +60,8 @@ services:
       - LOG_LEVEL=DEBUG
       - DATA_DIR=/data
     volumes:
-      - ../vgap:/app/vgap:ro # Mount source for development
+      - ../vgap:/app/vgap # Mount source for development
+      - ../alembic.ini:/app/alembic.ini:ro # Mount alembic config
       - vgap_data:/data
     ports:
       - "8000:8000"

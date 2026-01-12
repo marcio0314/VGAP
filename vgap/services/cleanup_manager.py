@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 
-from vgap.config importsettings
+from vgap.config import settings
 
 logger = logging.getLogger(__name__)
 
