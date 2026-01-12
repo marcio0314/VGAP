@@ -602,11 +602,18 @@ class AmpliconValidator:
     """Validates amplicon-specific requirements."""
     
     KNOWN_SCHEMES = {
+        # Underscore versions (legacy)
         "ARTIC_v3": {"amplicon_length": 400, "overlap": 50},
         "ARTIC_v4": {"amplicon_length": 400, "overlap": 50},
         "ARTIC_v4.1": {"amplicon_length": 400, "overlap": 50},
         "ARTIC_v5": {"amplicon_length": 400, "overlap": 50},
         "midnight": {"amplicon_length": 1200, "overlap": 100},
+        # Hyphenated versions (standard naming from ReferenceManager)
+        "ARTIC-V3": {"amplicon_length": 400, "overlap": 50},
+        "ARTIC-V4": {"amplicon_length": 400, "overlap": 50},
+        "ARTIC-V4.1": {"amplicon_length": 400, "overlap": 50},
+        "ARTIC-V5": {"amplicon_length": 400, "overlap": 50},
+        "ARTIC-V5.3.2": {"amplicon_length": 400, "overlap": 50},
     }
     
     def __init__(self, schemes_dir: Optional[Path] = None):
