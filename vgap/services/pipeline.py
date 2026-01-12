@@ -322,7 +322,7 @@ def process_run(self, run_id: str):
                     
                     import json
                     with open(lineage_dir / "lineage.json", "w") as f:
-                        json.dump(result.to_dict(), f, indent=2)
+                        json.dump([r.to_dict() for r in result], f, indent=2)
                     
                     session.execute(
                         update(Sample).where(Sample.id == sample.id).values(
