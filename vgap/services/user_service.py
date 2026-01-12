@@ -339,7 +339,7 @@ async def ensure_admin_exists(session: AsyncSession) -> User:
         return admin
     
     # Create initial admin from environment or generate secure password
-    admin_email = os.environ.get("VGAP_ADMIN_EMAIL", "admin@vgap.local")
+    admin_email = os.environ.get("VGAP_ADMIN_EMAIL", "admin@vgap.com")
     admin_password = os.environ.get("VGAP_ADMIN_PASSWORD")
     
     if not admin_password:

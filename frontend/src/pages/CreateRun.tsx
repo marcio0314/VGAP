@@ -21,6 +21,27 @@ interface SampleFile {
     }
 }
 
+interface UploadState {
+    status: 'idle' | 'uploading' | 'complete' | 'error'
+    message: string
+    currentFile?: string
+    filesUploaded: number
+    totalFiles: number
+}
+
+interface StructuredError {
+    message?: string
+    errors?: Array<{
+        code: string
+        message: string
+        remediation?: string
+    }>
+    warnings?: Array<{
+        code: string
+        message: string
+    }>
+}
+
 export default function CreateRun() {
     const navigate = useNavigate()
     const [step, setStep] = useState<Step>('mode')
@@ -29,15 +50,77 @@ export default function CreateRun() {
     const [primerScheme, setPrimerScheme] = useState('ARTIC-V5.3.2')
     const [samples, setSamples] = useState<SampleFile[]>([])
     const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({})
+    const [uploadState, setUploadState] = useState<UploadState>({
+        status: 'idle',
+        message: '',
+        filesUploaded: 0,
+        totalFiles: 0,
+    })
     const [error, setError] = useState('')
+    const [structuredError, setStructuredError] = useState<StructuredError | null>(null)
 
     const createRunMutation = useMutation({
         mutationFn: async () => {
-            // Create run
+            setStructuredError(null)
+
+            // 1. Create upload session
+            setUploadState({
+                status: 'uploading',
+                message: 'Creating upload session...',
+                filesUploaded: 0,
+                totalFiles: samples.reduce((acc, s) => acc + 1 + (s.r2 ? 1 : 0), 0),
+            })
+
+            const sessionResponse = await uploadApi.createSession()
+            const sessionId = sessionResponse.data.session_id
+            console.log('Upload session created:', sessionResponse.data)
+
+            // 2. Upload files with status tracking
+            let filesUploaded = 0
+            for (const sample of samples) {
+                // Upload R1
+                setUploadState(prev => ({
+                    ...prev,
+                    currentFile: sample.r1.name,
+                    message: `Uploading ${sample.r1.name}...`,
+                }))
+
+                const r1Response = await uploadApi.upload(sessionId, sample.r1, (progress) => {
+                    setUploadProgress(prev => ({ ...prev, [sample.r1.name]: progress }))
+                })
+                console.log('R1 upload response:', r1Response.data)
+                filesUploaded++
+                setUploadState(prev => ({ ...prev, filesUploaded }))
+
+                // Upload R2
+                if (sample.r2) {
+                    setUploadState(prev => ({
+                        ...prev,
+                        currentFile: sample.r2!.name,
+                        message: `Uploading ${sample.r2!.name}...`,
+                    }))
+
+                    const r2Response = await uploadApi.upload(sessionId, sample.r2, (progress) => {
+                        setUploadProgress(prev => ({ ...prev, [sample.r2!.name]: progress }))
+                    })
+                    console.log('R2 upload response:', r2Response.data)
+                    filesUploaded++
+                    setUploadState(prev => ({ ...prev, filesUploaded }))
+                }
+            }
+
+            setUploadState(prev => ({
+                ...prev,
+                status: 'complete',
+                message: 'All files uploaded. Creating run...',
+            }))
+
+            // 3. Create run
             const runData = {
                 name: runName,
                 mode,
                 primer_scheme: mode === 'amplicon' ? primerScheme : null,
+                upload_session_id: sessionId,
                 samples: samples.map(s => ({
                     r1_filename: s.r1.name,
                     r2_filename: s.r2?.name,
@@ -48,22 +131,32 @@ export default function CreateRun() {
                         location: "Unknown",
                         protocol: mode,
                         platform: "Illumina",
-                        run_id: "pending", // Backend should overwrite or we use a placeholder
+                        run_id: "pending",
                         batch_id: "default-batch",
                         ...s.metadata
                     },
                 })),
             }
 
+            console.log("Submitting Run Data:", JSON.stringify(runData, null, 2))
             const response = await runsApi.create(runData)
             return response.data
         },
         onSuccess: (data) => {
+            setUploadState({ status: 'idle', message: '', filesUploaded: 0, totalFiles: 0 })
             navigate(`/app/runs/${data.id}`)
         },
         onError: (err: any) => {
+            console.error("Create Run Error:", err)
+            setUploadState(prev => ({ ...prev, status: 'error', message: 'Upload failed' }))
+
             const detail = err.response?.data?.detail
-            setError(typeof detail === 'string' ? detail : JSON.stringify(detail))
+            if (typeof detail === 'object' && detail !== null) {
+                setStructuredError(detail as StructuredError)
+                setError('')
+            } else {
+                setError(typeof detail === 'string' ? detail : JSON.stringify(detail, null, 2))
+            }
         },
     })
 
@@ -211,11 +304,59 @@ export default function CreateRun() {
                 </div>
             </div>
 
-            {/* Error */}
+            {/* Upload Status */}
+            {uploadState.status === 'uploading' && (
+                <div className="p-4 rounded-xl bg-primary-50 dark:bg-primary-500/10 text-primary-700 dark:text-primary-300 mb-6">
+                    <div className="flex items-center gap-3 mb-2">
+                        <Upload className="w-5 h-5 animate-pulse" />
+                        <span className="font-medium">{uploadState.message}</span>
+                    </div>
+                    <div className="text-sm text-primary-600 dark:text-primary-400 mb-2">
+                        Files: {uploadState.filesUploaded} / {uploadState.totalFiles}
+                    </div>
+                    <div className="w-full bg-primary-200 dark:bg-primary-800 rounded-full h-2">
+                        <div
+                            className="bg-primary-500 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${(uploadState.filesUploaded / uploadState.totalFiles) * 100}%` }}
+                        />
+                    </div>
+                </div>
+            )}
+
+            {/* Structured Error */}
+            {structuredError && (
+                <div className="p-4 rounded-xl bg-danger-50 dark:bg-danger-500/10 text-danger-600 mb-6">
+                    <div className="flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                            <div className="font-medium mb-2">{structuredError.message || 'Validation Failed'}</div>
+                            {structuredError.errors?.map((err, i) => (
+                                <div key={i} className="text-sm mb-2 p-2 bg-danger-100 dark:bg-danger-900/30 rounded">
+                                    <div className="font-mono text-xs text-danger-500 mb-1">{err.code}</div>
+                                    <div>{err.message}</div>
+                                    {err.remediation && (
+                                        <div className="mt-1 text-danger-500 text-xs">💡 {err.remediation}</div>
+                                    )}
+                                </div>
+                            ))}
+                            {structuredError.warnings?.map((warn, i) => (
+                                <div key={i} className="text-sm mb-1 text-amber-600">
+                                    ⚠️ {warn.message}
+                                </div>
+                            ))}
+                        </div>
+                        <button onClick={() => setStructuredError(null)} className="ml-auto">
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Simple Error */}
             {error && (
                 <div className="flex items-start gap-3 p-4 rounded-xl bg-danger-50 dark:bg-danger-500/10 text-danger-600 mb-6">
                     <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                    <span className="text-sm">{error}</span>
+                    <span className="text-sm whitespace-pre-wrap font-mono">{error}</span>
                     <button onClick={() => setError('')} className="ml-auto">
                         <X className="w-4 h-4" />
                     </button>

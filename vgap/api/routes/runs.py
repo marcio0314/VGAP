@@ -16,7 +16,7 @@ from vgap.api.routes.auth import get_current_user, require_admin, require_analys
 from vgap.api.schemas import (
     RunCreate, RunResponse, RunStatus as RunStatusSchema, RunListResponse,
     RunStartResponse, ValidationResultResponse, ProvenanceResponse,
-    PipelineMode,
+    PipelineMode, RunDetailResponse,
 )
 from vgap.config import get_settings
 from vgap.models import User, Run, RunStatus
@@ -85,8 +85,20 @@ async def create_new_run(
         project_id=run_data.project_id,
     )
     
-    # Add samples
+    # Handle file uploads
     upload_service = UploadService()
+    if run_data.upload_session_id:
+        try:
+            await upload_service.promote_session_to_run(
+                run_data.upload_session_id, str(run.id)
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e)
+            )
+            
+    # Add samples
     for sample_data in run_data.samples:
         # Get file paths from upload session
         r1_path = str(upload_service.get_file_path(
@@ -163,8 +175,8 @@ async def list_all_runs(
     )
 
 
-@router.get("/{run_id}", response_model=RunResponse)
-async def get_run(
+@router.get("/{run_id}", response_model=RunDetailResponse)
+async def get_run_details(
     run_id: UUID,
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
@@ -187,7 +199,25 @@ async def get_run(
     
     sample_count = await get_run_sample_count(session, run_id)
     
-    return run_to_response(run, sample_count)
+    return RunDetailResponse(
+        id=run.id,
+        run_code=run.run_code,
+        name=run.name,
+        description=run.description,
+        status=run.status.value,
+        mode=run.mode,
+        primer_scheme=run.primer_scheme,
+        created_at=run.created_at,
+        started_at=run.started_at,
+        completed_at=run.completed_at,
+        sample_count=sample_count,
+        progress=run.progress or 0,
+        current_stage=run.current_stage,
+        error_message=run.error_message,
+        parameters=run.parameters,
+        samples=run.samples,
+        provenance=run.provenance,
+    )
 
 
 @router.get("/{run_id}/status", response_model=RunStatusSchema)
@@ -248,19 +278,36 @@ async def start_run_processing(
             detail="Run has no samples"
         )
     
-    validator = PreflightValidator()
+    validator = PreflightValidator(
+        references_dir=Path(settings.storage.references_dir)
+    )
     validation_samples = []
     for sample in samples:
         validation_samples.append({
             "r1_path": sample.r1_path,
             "r2_path": sample.r2_path,
-            "metadata": sample.metadata,
+            "metadata": sample.sample_metadata or {
+                "sample_id": sample.sample_id,
+                "collection_date": str(sample.collection_date.date()) if sample.collection_date else None,
+                "host": sample.host,
+                "location": sample.location,
+                "protocol": sample.protocol,
+                "platform": sample.platform,
+                "run_id": sample.sequencing_run_id,
+                "batch_id": sample.batch_id,
+            },
         })
+    
+    # Get reference path
+    from vgap.services.reference_manager import ReferenceManager
+    ref_manager = ReferenceManager()
+    reference_path = ref_manager.get_reference_path(run.reference_id or "sars-cov-2")
     
     result = validator.validate_run(
         samples=validation_samples,
         mode=run.mode,
         primer_scheme=run.primer_scheme,
+        reference_path=reference_path,
     )
     
     if result.blocked:
@@ -275,7 +322,8 @@ async def start_run_processing(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "message": "Pre-flight validation failed",
-                "errors": [e.model_dump() for e in result.errors],
+                "errors": [e.to_dict() for e in result.errors],
+                "warnings": [w.to_dict() for w in result.warnings],
             }
         )
     

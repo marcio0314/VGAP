@@ -88,7 +88,9 @@ export const uploadApi = {
         formData.append('file', file)
 
         return api.post(`/upload/${sessionId}`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
+            headers: {
+                'Content-Type': undefined // Let the browser set it with the boundary
+            },
             onUploadProgress: (event) => {
                 if (event.total && onProgress) {
                     onProgress(Math.round((event.loaded / event.total) * 100))

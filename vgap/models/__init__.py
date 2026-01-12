@@ -87,6 +87,16 @@ class AuditAction(str, PyEnum):
     DB_UPDATE = "db_update"
 
 
+class UploadStatus(str, PyEnum):
+    """Upload lifecycle status."""
+    IDLE = "idle"
+    UPLOADING = "uploading"
+    VALIDATING = "validating"
+    STORED = "stored"
+    READY = "ready"
+    FAILED = "failed"
+
+
 # =============================================================================
 # MIXINS
 # =============================================================================
@@ -545,4 +555,58 @@ class AuditLog(Base, UUIDMixin):
         Index("ix_audit_timestamp", "timestamp"),
         Index("ix_audit_user", "user_id"),
         Index("ix_audit_action", "action"),
+    )
+
+
+# =============================================================================
+# UPLOAD TRACKING
+# =============================================================================
+
+class Upload(Base, UUIDMixin, TimestampMixin):
+    """Upload session tracking for user visibility."""
+    
+    __tablename__ = "uploads"
+    
+    # Session info
+    session_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    
+    # File info
+    filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    
+    # Progress tracking
+    bytes_uploaded: Mapped[int] = mapped_column(Integer, default=0)
+    total_bytes: Mapped[Optional[int]] = mapped_column(Integer)
+    
+    # Status
+    status: Mapped[UploadStatus] = mapped_column(
+        Enum(UploadStatus),
+        default=UploadStatus.IDLE,
+        nullable=False,
+    )
+    
+    # Validation
+    checksum: Mapped[Optional[str]] = mapped_column(String(64))
+    validation_result: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB)
+    
+    # Error handling
+    error_message: Mapped[Optional[str]] = mapped_column(Text)
+    error_code: Mapped[Optional[str]] = mapped_column(String(50))
+    
+    # Linked run (after promotion)
+    run_id: Mapped[Optional[UUID]] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("runs.id", ondelete="SET NULL"),
+    )
+    
+    # User who initiated upload
+    user_id: Mapped[Optional[UUID]] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id"),
+    )
+    
+    __table_args__ = (
+        Index("ix_upload_session", "session_id"),
+        Index("ix_upload_status", "status"),
+        Index("ix_upload_user", "user_id"),
     )

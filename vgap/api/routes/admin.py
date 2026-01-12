@@ -58,6 +58,59 @@ async def list_databases(
     ]
 
 
+@router.get("/databases/inventory")
+async def get_database_inventory(
+    current_user: User = Depends(require_admin),
+):
+    """
+    Get complete database inventory from filesystem.
+    
+    Returns installed references, primer schemes, and their status.
+    Does NOT require database access - reads directly from filesystem.
+    """
+    from vgap.services.reference_manager import ReferenceManager
+    
+    manager = ReferenceManager()
+    return manager.get_inventory()
+
+
+@router.post("/databases/bootstrap")
+async def bootstrap_databases(
+    current_user: User = Depends(require_admin),
+):
+    """
+    Bootstrap all reference databases.
+    
+    Downloads SARS-CoV-2 reference from NCBI and ARTIC primer schemes.
+    This operation may take several minutes.
+    """
+    from vgap.services.reference_manager import ReferenceManager
+    
+    manager = ReferenceManager()
+    result = manager.bootstrap_all()
+    
+    return {
+        "success": result["success"],
+        "message": "Database bootstrap complete" if result["success"] else "Bootstrap completed with errors",
+        "details": result,
+    }
+
+
+@router.get("/databases/verify")
+async def verify_database_integrity(
+    current_user: User = Depends(require_admin),
+):
+    """
+    Verify integrity of installed databases.
+    
+    Checks checksums and file existence.
+    """
+    from vgap.services.reference_manager import ReferenceManager
+    
+    manager = ReferenceManager()
+    return manager.verify_integrity()
+
+
 @router.post("/databases/{name}/update", response_model=DatabaseUpdateResponse)
 async def update_database(
     name: str,

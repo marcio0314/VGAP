@@ -61,6 +61,32 @@ async def lifespan(app: FastAPI):
             logger.warning("Could not ensure admin exists", error=str(e))
         break
     
+    # Bootstrap reference databases if not installed
+    try:
+        from vgap.services.reference_manager import ReferenceManager
+        ref_manager = ReferenceManager()
+        inventory = ref_manager.get_inventory()
+        
+        if inventory["missing_critical"]:
+            logger.warning(
+                "Missing critical reference databases",
+                missing=inventory["missing_critical"]
+            )
+            logger.info("Auto-bootstrapping reference databases...")
+            result = ref_manager.bootstrap_all()
+            if result["success"]:
+                logger.info("Reference databases bootstrapped successfully")
+            else:
+                logger.error(
+                    "Reference database bootstrap failed",
+                    errors=result["errors"]
+                )
+        else:
+            logger.info("Reference databases verified", 
+                       references=list(inventory["references"].keys()))
+    except Exception as e:
+        logger.error("Failed to check/bootstrap reference databases", error=str(e))
+    
     logger.info("VGAP API server ready")
     
     yield
@@ -285,6 +311,26 @@ app.include_router(maintenance.router, prefix="/api/v1/maintenance", tags=["Main
 
 from fastapi import UploadFile, File
 
+@app.post("/api/v1/upload/session")
+async def create_upload_session():
+    """
+    Create a new upload session.
+    
+    Returns structured response with session_id and status.
+    """
+    from vgap.services.upload import UploadService
+    
+    upload_service = UploadService()
+    session_id = await upload_service.create_upload_session()
+    
+    return {
+        "session_id": session_id,
+        "status": "IDLE",
+        "message": "Upload session created. Ready to receive files.",
+        "expected_next_step": "UPLOAD",
+    }
+
+
 @app.post("/api/v1/upload/{session_id}")
 async def upload_file(
     session_id: str,
@@ -294,6 +340,7 @@ async def upload_file(
     Upload a file to a session.
     
     Files are streamed to disk without loading into memory.
+    Returns structured response with upload status and validation info.
     """
     from vgap.services.upload import UploadService
     
@@ -304,7 +351,14 @@ async def upload_file(
     if not is_valid:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content={"detail": error}
+            content={
+                "sample_id": None,
+                "status": "FAILED",
+                "message": error,
+                "expected_next_step": "FIX_FILENAME",
+                "error_code": "INVALID_FILENAME",
+                "remediation_hint": "Rename the file to use only alphanumeric characters, underscores, hyphens, and periods. No spaces allowed.",
+            }
         )
     
     # Stream upload
@@ -319,24 +373,75 @@ async def upload_file(
             stream=file_stream(),
         )
         
+        # Extract sample ID from filename (remove extension)
+        sample_id = file.filename
+        for ext in ['.fastq.gz', '.fq.gz', '.fastq', '.fq']:
+            if sample_id.lower().endswith(ext):
+                sample_id = sample_id[:-len(ext)]
+                break
+        
         return {
+            "sample_id": sample_id,
             "filename": file.filename,
             "size": size,
             "checksum": checksum,
+            "status": "STORED",
+            "message": f"File uploaded successfully ({size:,} bytes)",
+            "expected_next_step": "CREATE_RUN",
         }
     except ValueError as e:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content={"detail": str(e)}
+            content={
+                "sample_id": None,
+                "status": "FAILED",
+                "message": str(e),
+                "expected_next_step": "RETRY",
+                "error_code": "UPLOAD_FAILED",
+                "remediation_hint": "Check that the session ID is valid and the file is not too large.",
+            }
         )
 
 
-@app.post("/api/v1/upload/session")
-async def create_upload_session():
-    """Create a new upload session."""
+@app.get("/api/v1/upload/{session_id}/status")
+async def get_upload_status(session_id: str):
+    """
+    Get the status of an upload session.
+    
+    Returns all files in the session and their status.
+    """
     from vgap.services.upload import UploadService
     
     upload_service = UploadService()
-    session_id = await upload_service.create_upload_session()
+    session_dir = upload_service.upload_dir / session_id
     
-    return {"session_id": session_id}
+    if not session_dir.exists():
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "session_id": session_id,
+                "status": "NOT_FOUND",
+                "message": f"Upload session {session_id} not found",
+                "expected_next_step": "CREATE_SESSION",
+                "error_code": "SESSION_NOT_FOUND",
+            }
+        )
+    
+    files = []
+    for path in session_dir.iterdir():
+        if path.is_file():
+            files.append({
+                "filename": path.name,
+                "size": path.stat().st_size,
+                "status": "STORED",
+            })
+    
+    return {
+        "session_id": session_id,
+        "status": "READY" if files else "IDLE",
+        "file_count": len(files),
+        "files": files,
+        "message": f"{len(files)} file(s) ready" if files else "No files uploaded yet",
+        "expected_next_step": "CREATE_RUN" if files else "UPLOAD",
+    }
+

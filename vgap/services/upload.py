@@ -161,3 +161,26 @@ class UploadService:
     def get_file_path(self, session_id: str, filename: str) -> Path:
         """Get the path to an uploaded file."""
         return self.upload_dir / session_id / filename
+
+    async def promote_session_to_run(self, session_id: str, run_id: str):
+        """
+        Promote an upload session to a run directory.
+        
+        Renames the session directory to the run ID.
+        """
+        session_dir = self.upload_dir / session_id
+        run_dir = self.upload_dir / run_id
+        
+        if not session_dir.exists():
+            raise ValueError(f"Upload session not found: {session_id}")
+            
+        if run_dir.exists():
+            # If run dir exists (e.g. from previous attempt), merge files
+            for file_path in session_dir.iterdir():
+                if file_path.is_file():
+                    shutil.move(str(file_path), str(run_dir / file_path.name))
+            shutil.rmtree(session_dir)
+        else:
+            session_dir.rename(run_dir)
+            
+        logger.info("Promoted upload session", session_id=session_id, run_id=run_id)

@@ -59,22 +59,11 @@ async def get_current_user(
     Returns a default admin user for single-user local deployment.
     No token validation required.
     """
-    from uuid import uuid4
-    from vgap.models import UserRole
+    from vgap.services.user_service import ensure_admin_exists
     
-    # Return a synthetic admin user object for local single-user mode
-    # This allows all API endpoints to function without authentication
-    class DefaultUser:
-        def __init__(self):
-            self.id = uuid4()
-            self.email = "admin@vgap.local"
-            self.full_name = "VGAP Admin"
-            self.role = UserRole.ADMIN
-            self.is_active = True
-            self.created_at = datetime.utcnow()
-            self.last_login = datetime.utcnow()
-    
-    return DefaultUser()
+    # Return the actual persisted admin user
+    # This ensures foreign key constraints are satisfied
+    return await ensure_admin_exists(session)
 
 
 async def get_current_active_user(

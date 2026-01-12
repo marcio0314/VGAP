@@ -188,6 +188,7 @@ class RunCreate(BaseModel):
     parameters: RunParameters = Field(default_factory=RunParameters)
     samples: list[SampleCreate]
     project_id: Optional[UUID] = None
+    upload_session_id: Optional[str] = None
     
     @field_validator("primer_scheme")
     @classmethod
