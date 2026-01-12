@@ -224,7 +224,7 @@ def process_run(self, run_id: str):
         
         consensus_gen = ConsensusGenerator(
             min_depth=settings.pipeline.min_depth,
-            min_freq=settings.pipeline.min_allele_freq,
+            min_af=settings.pipeline.min_allele_freq,
         )
         
         all_consensus = []
