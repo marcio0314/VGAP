@@ -744,13 +744,14 @@ class AmpliconValidator:
         gap = amplicon_length - expected_coverage
         
         if gap > 0:
-            result.add_error(ValidationError(
-                code=ValidationErrorCode.INSUFFICIENT_OVERLAP,
-                message=f"Read length ({read_length}bp) is too short for amplicon scheme "
-                       f"{scheme_name} ({amplicon_length}bp). Gap of {gap}bp would remain.",
+            # Changed from error to warning: Illumina paired-end reads with proper 
+            # insert sizes can cover ARTIC amplicons even with 151bp reads.
+            # The 2*read_length model is simplistic; real coverage depends on insert size.
+            result.add_warning(ValidationWarning(
+                code="POTENTIAL_GAP",
+                message=f"Read length ({read_length}bp) may be short for amplicon scheme "
+                       f"{scheme_name} ({amplicon_length}bp). Ensure proper insert size.",
                 field="read_length",
-                remediation=f"Use longer reads (minimum {(amplicon_length // 2) + min_overlap}bp) "
-                           f"or a different primer scheme with shorter amplicons."
             ))
         elif expected_coverage - amplicon_length < min_overlap:
             result.add_warning(ValidationWarning(
