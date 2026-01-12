@@ -279,7 +279,7 @@ def process_run(self, run_id: str):
                 variants_list = caller.call_variants(
                     bam=bam,
                     ref=reference,
-                    output_vcf=variants_dir / "variants.vcf",
+                    output_vcf=variants_dir / "variants.vcf.gz",
                 )
                 
                 # Annotate and filter
