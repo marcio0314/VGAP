@@ -145,7 +145,14 @@ async def get_run_by_id(
     query = select(Run).where(Run.id == run_id)
     
     if include_samples:
-        query = query.options(selectinload(Run.samples))
+        query = query.options(
+            selectinload(Run.samples).options(
+                selectinload(Sample.qc_metrics),
+                selectinload(Sample.lineage),
+                selectinload(Sample.consensus),
+                selectinload(Sample.variants),
+            )
+        )
     
     result = await session.execute(query)
     return result.scalar_one_or_none()

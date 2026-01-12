@@ -1,7 +1,7 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import {
     Dna, LayoutDashboard, PlayCircle, FileText,
-    Settings, LogOut, User, Menu, X, Sun, Moon
+    Settings, LogOut, User, Menu, X, Sun, Moon, HardDrive
 } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
@@ -10,6 +10,7 @@ const navigation = [
     { name: 'Dashboard', href: '/app', icon: LayoutDashboard },
     { name: 'Runs', href: '/app/runs', icon: PlayCircle },
     { name: 'Reports', href: '/app/reports', icon: FileText },
+    { name: 'Maintenance', href: '/app/maintenance', icon: HardDrive, adminOnly: true },
     { name: 'Admin', href: '/app/admin', icon: Settings, adminOnly: true },
 ]
 

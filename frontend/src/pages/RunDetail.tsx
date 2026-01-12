@@ -46,7 +46,7 @@ export default function RunDetail() {
     const { data: statusData } = useQuery({
         queryKey: ['run-status', id],
         queryFn: () => runsApi.status(id!),
-        enabled: runData?.data?.status === 'running',
+        enabled: runData?.data?.status === 'running' || runData?.data?.status === 'queued',
         refetchInterval: 2000,
     })
 
@@ -347,7 +347,15 @@ function SamplesTable({ samples, runId, expandedSample, setExpandedSample }: {
                             </span>
 
                             {sample.lineage && (
-                                <span className="badge-info">{sample.lineage}</span>
+                                <span className="badge-info">
+                                    {(() => {
+                                        console.log(`Debug sample ${sample.sample_id} lineage:`, sample.lineage, typeof sample.lineage);
+                                        if (typeof sample.lineage === 'object' && sample.lineage) {
+                                            return sample.lineage.nextclade_clade || sample.lineage.pangolin_lineage || '-';
+                                        }
+                                        return String(sample.lineage);
+                                    })()}
+                                </span>
                             )}
 
                             {isExpanded ? (

@@ -94,16 +94,17 @@ class NextcladeRunner:
         """Run Nextclade on FASTA file."""
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        cmd = ["nextclade", "run", "--input-fasta", str(fasta),
-               "--output-all", str(output_dir)]
+        cmd = ["nextclade", "run"]
         
         if self.data_path:
             cmd.extend(["--input-dataset", str(self.data_path)])
         else:
             cmd.extend(["--dataset-name", self.dataset])
+            
+        cmd.extend(["--output-all", str(output_dir), str(fasta)])
         
         logger.info("Running Nextclade", fasta=str(fasta))
-        subprocess.run(cmd, capture_output=True, timeout=3600)
+        subprocess.run(cmd, check=True, capture_output=True, timeout=3600)
         
         return self._parse_results(output_dir / "nextclade.json")
     

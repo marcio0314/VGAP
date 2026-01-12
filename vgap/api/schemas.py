@@ -107,164 +107,6 @@ class UserUpdate(BaseModel):
     password: Optional[str] = Field(None, min_length=8)
 
 
-# =============================================================================
-# SAMPLE SCHEMAS
-# =============================================================================
-
-class SampleMetadata(BaseModel):
-    """Required sample metadata."""
-    sample_id: str = Field(..., min_length=1, max_length=100)
-    collection_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
-    host: str = Field(..., min_length=1, max_length=50)
-    location: str = Field(..., min_length=1, max_length=255)
-    protocol: str = Field(..., pattern=r"^(amplicon|shotgun|capture)$")
-    platform: str = Field(..., min_length=1, max_length=100)
-    run_id: str = Field(..., min_length=1, max_length=100)
-    batch_id: str = Field(..., min_length=1, max_length=100)
-    clinical_group: Optional[str] = Field(None, max_length=100)
-    is_control: bool = False
-    control_type: Optional[str] = Field(None, pattern=r"^(positive|negative)$")
-    notes: Optional[str] = None
-    
-    @field_validator("collection_date")
-    @classmethod
-    def validate_date(cls, v: str) -> str:
-        from datetime import datetime as dt
-        try:
-            dt.strptime(v, "%Y-%m-%d")
-        except ValueError:
-            raise ValueError("Invalid date format. Use YYYY-MM-DD.")
-        return v
-
-
-class SampleCreate(BaseModel):
-    """Sample creation with file paths."""
-    metadata: SampleMetadata
-    r1_filename: str
-    r2_filename: Optional[str] = None
-
-
-class SampleResponse(BaseModel):
-    """Sample response."""
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: UUID
-    sample_id: str
-    collection_date: datetime
-    host: str
-    location: str
-    protocol: str
-    status: SampleStatus
-    error_message: Optional[str] = None
-    created_at: datetime
-
-
-class SampleDetailResponse(SampleResponse):
-    """Detailed sample response with results."""
-    qc_metrics: Optional[dict[str, Any]] = None
-    consensus_info: Optional[dict[str, Any]] = None
-    variant_count: int = 0
-    lineage: Optional[dict[str, Any]] = None
-
-
-# =============================================================================
-# RUN SCHEMAS
-# =============================================================================
-
-class RunParameters(BaseModel):
-    """Configurable run parameters."""
-    min_depth: int = Field(10, ge=1, le=1000)
-    min_allele_freq: float = Field(0.5, ge=0.0, le=1.0)
-    min_variant_freq: float = Field(0.02, ge=0.0, le=1.0)
-    min_read_length: int = Field(50, ge=20, le=500)
-    min_base_quality: int = Field(20, ge=0, le=40)
-    enable_host_removal: bool = True
-    enable_phylogeny: bool = True
-
-
-class RunCreate(BaseModel):
-    """Run creation request."""
-    name: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = None
-    mode: PipelineMode
-    primer_scheme: Optional[str] = None
-    reference_id: Optional[str] = None
-    parameters: RunParameters = Field(default_factory=RunParameters)
-    samples: list[SampleCreate]
-    project_id: Optional[UUID] = None
-    upload_session_id: Optional[str] = None
-    
-    @field_validator("primer_scheme")
-    @classmethod
-    def validate_primer_scheme(cls, v: Optional[str], info) -> Optional[str]:
-        mode = info.data.get("mode")
-        if mode == PipelineMode.AMPLICON and not v:
-            raise ValueError("Primer scheme is required for amplicon mode")
-        return v
-
-
-class RunResponse(BaseModel):
-    """Run response."""
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: UUID
-    run_code: str
-    name: str
-    description: Optional[str]
-    status: RunStatus
-    mode: PipelineMode
-    primer_scheme: Optional[str]
-    sample_count: int = 0
-    created_at: datetime
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
-
-
-class RunDetailResponse(RunResponse):
-    """Detailed run response."""
-    parameters: dict[str, Any]
-    samples: list[SampleResponse]
-    provenance: Optional[dict[str, Any]] = None
-
-
-
-
-
-class RunStatusUpdate(BaseModel):
-    """Run status update."""
-    status: RunStatus
-    error_message: Optional[str] = None
-
-
-# =============================================================================
-# VALIDATION SCHEMAS
-# =============================================================================
-
-class ValidationError(BaseModel):
-    """Single validation error."""
-    code: str
-    message: str
-    field: Optional[str] = None
-    sample_id: Optional[str] = None
-    remediation: Optional[str] = None
-
-
-class ValidationWarning(BaseModel):
-    """Single validation warning."""
-    code: str
-    message: str
-    field: Optional[str] = None
-    sample_id: Optional[str] = None
-
-
-class ValidationResult(BaseModel):
-    """Complete validation result."""
-    status: str
-    errors: list[ValidationError] = []
-    warnings: list[ValidationWarning] = []
-    metadata: dict[str, Any] = {}
-
 
 # =============================================================================
 # RESULTS SCHEMAS
@@ -333,6 +175,163 @@ class ConsensusResponse(BaseModel):
     n_percentage: float
     min_depth: int
     min_allele_freq: float
+
+class SampleMetadata(BaseModel):
+    """Required sample metadata."""
+    sample_id: str = Field(..., min_length=1, max_length=100)
+    collection_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    host: str = Field(..., min_length=1, max_length=50)
+    location: str = Field(..., min_length=1, max_length=255)
+    protocol: str = Field(..., pattern=r"^(amplicon|shotgun|capture)$")
+    platform: str = Field(..., min_length=1, max_length=100)
+    run_id: str = Field(..., min_length=1, max_length=100)
+    batch_id: str = Field(..., min_length=1, max_length=100)
+    clinical_group: Optional[str] = Field(None, max_length=100)
+    is_control: bool = False
+    control_type: Optional[str] = Field(None, pattern=r"^(positive|negative)$")
+    notes: Optional[str] = None
+    
+    @field_validator("collection_date")
+    @classmethod
+    def validate_date(cls, v: str) -> str:
+        from datetime import datetime as dt
+        try:
+            dt.strptime(v, "%Y-%m-%d")
+        except ValueError:
+            raise ValueError("Invalid date format. Use YYYY-MM-DD.")
+        return v
+
+
+class SampleCreate(BaseModel):
+    """Sample creation with file paths."""
+    metadata: SampleMetadata
+    r1_filename: str
+    r2_filename: Optional[str] = None
+
+
+class SampleResponse(BaseModel):
+    """Sample response."""
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: UUID
+    sample_id: str
+    collection_date: datetime
+    host: str
+    location: str
+    protocol: str
+    status: SampleStatus
+    error_message: Optional[str] = None
+    created_at: datetime
+
+
+class SampleDetailResponse(SampleResponse):
+    """Detailed sample response with results."""
+    qc_metrics: Optional[QCMetricsResponse] = None
+    consensus_info: Optional[ConsensusResponse] = Field(None, alias="consensus")
+    variant_count: int = 0
+    lineage: Optional[LineageResponse] = None
+
+
+# =============================================================================
+# RUN SCHEMAS
+# =============================================================================
+
+class RunParameters(BaseModel):
+    """Configurable run parameters."""
+    min_depth: int = Field(10, ge=1, le=1000)
+    min_allele_freq: float = Field(0.5, ge=0.0, le=1.0)
+    min_variant_freq: float = Field(0.02, ge=0.0, le=1.0)
+    min_read_length: int = Field(50, ge=20, le=500)
+    min_base_quality: int = Field(20, ge=0, le=40)
+    enable_host_removal: bool = True
+    enable_phylogeny: bool = True
+
+
+class RunCreate(BaseModel):
+    """Run creation request."""
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = None
+    mode: PipelineMode
+    primer_scheme: Optional[str] = None
+    reference_id: Optional[str] = None
+    parameters: RunParameters = Field(default_factory=RunParameters)
+    samples: list[SampleCreate]
+    project_id: Optional[UUID] = None
+    upload_session_id: Optional[str] = None
+    
+    @field_validator("primer_scheme")
+    @classmethod
+    def validate_primer_scheme(cls, v: Optional[str], info) -> Optional[str]:
+        mode = info.data.get("mode")
+        if mode == PipelineMode.AMPLICON and not v:
+            raise ValueError("Primer scheme is required for amplicon mode")
+        return v
+
+
+class RunResponse(BaseModel):
+    """Run response."""
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: UUID
+    run_code: str
+    name: str
+    description: Optional[str]
+    status: RunStatus
+    mode: PipelineMode
+    primer_scheme: Optional[str]
+    sample_count: int = 0
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    error_message: Optional[str] = None
+
+
+class RunDetailResponse(RunResponse):
+    """Detailed run response."""
+    parameters: dict[str, Any]
+    samples: list[SampleDetailResponse]
+    provenance: Optional[dict[str, Any]] = None
+
+
+
+
+
+class RunStatusUpdate(BaseModel):
+    """Run status update."""
+    status: RunStatus
+    error_message: Optional[str] = None
+
+
+# =============================================================================
+# VALIDATION SCHEMAS
+# =============================================================================
+
+class ValidationError(BaseModel):
+    """Single validation error."""
+    code: str
+    message: str
+    field: Optional[str] = None
+    sample_id: Optional[str] = None
+    remediation: Optional[str] = None
+
+
+class ValidationWarning(BaseModel):
+    """Single validation warning."""
+    code: str
+    message: str
+    field: Optional[str] = None
+    sample_id: Optional[str] = None
+
+
+class ValidationResult(BaseModel):
+    """Complete validation result."""
+    status: str
+    errors: list[ValidationError] = []
+    warnings: list[ValidationWarning] = []
+    metadata: dict[str, Any] = {}
+
+
+
 
 
 # =============================================================================

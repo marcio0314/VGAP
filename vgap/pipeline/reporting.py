@@ -509,7 +509,8 @@ class FigureGenerator:
             
             return output_path
             
-        except ImportError:
+        except Exception as e:
+            logger.warning("Failed to generate variant chart", error=str(e))
             return None
     
     def lineage_pie(self, lineage_counts: dict[str, int]) -> Path:
@@ -533,7 +534,8 @@ class FigureGenerator:
             
             return output_path
             
-        except ImportError:
+        except Exception as e:
+            logger.warning("Failed to generate lineage chart", error=str(e))
             return None
 
 

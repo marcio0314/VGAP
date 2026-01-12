@@ -29,7 +29,7 @@ celery_app.conf.update(
 )
 
 # Auto-discover tasks
-celery_app.autodiscover_tasks(["vgap.services"])
+celery_app.autodiscover_tasks(["vgap.services", "vgap.tasks"])
 
 
 def main():

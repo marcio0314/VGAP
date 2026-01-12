@@ -199,6 +199,10 @@ async def get_run_details(
     
     sample_count = await get_run_sample_count(session, run_id)
     
+    # Calculate variant counts for response
+    for sample in run.samples:
+        sample.variant_count = len(sample.variants) if sample.variants else 0
+    
     return RunDetailResponse(
         id=run.id,
         run_code=run.run_code,

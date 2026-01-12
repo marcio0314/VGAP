@@ -1,103 +1,87 @@
-"""
-VGAP Maintenance API Routes
-
-Provides cleanup operations for platform maintenance.
-"""
-
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from typing import Dict, Any, List
 from pydantic import BaseModel
 
-from vgap.services.maintenance import dry_run_cleanup, execute_cleanup
+from vgap.services.cleanup_manager import CleanupManager
+from vgap.tasks.maintenance import prune_docker_resources, scan_docker_usage
 
-router = APIRouter()
+router = APIRouter(prefix="/maintenance", tags=["maintenance"])
 
+class CleanupPolicy(BaseModel):
+    delete_temp_files: bool = True
+    delete_orphaned_uploads: bool = False # Safer default
+    retention_days_runs: int = 5
+    retention_days_reports: int = 14
+    prune_docker_images: bool = False
+    prune_docker_volumes: bool = False
 
-class CleanupRequest(BaseModel):
-    """Request to execute cleanup."""
+@router.get("/usage")
+async def get_disk_usage() -> Dict[str, Any]:
+    """
+    Get current disk usage statistics (Files + Docker).
+    """
+    manager = CleanupManager()
+    local_stats = manager.scan_usage()
+    
+    # Attempt to get docker stats
+    docker_stats = {"status": "unavailable"}
+    try:
+        # We use a short timeout to not block too long
+        task = scan_docker_usage.apply_async()
+        # Wait up to 3 seconds
+        docker_stats = task.get(timeout=3.0)
+    except Exception as e:
+        docker_stats["error"] = str(e)
+
+    return {
+        "local": local_stats,
+        "docker": docker_stats
+    }
+
+@router.post("/cleanup/preview")
+async def preview_cleanup(policy: CleanupPolicy) -> Dict[str, Any]:
+    """
+    Preview what would be deleted based on the policy.
+    Note: Docker prune does not support granular preview easily, so it just warns.
+    """
+    manager = CleanupManager()
+    preview = manager.preview_cleanup(policy.model_dump())
+    
+    if policy.prune_docker_images:
+        preview["docker_warning"] = "Docker images and build cache will be pruned."
+    
+    return preview
+
+@router.post("/cleanup/execute")
+async def execute_cleanup(
+    policy: CleanupPolicy, 
+    background_tasks: BackgroundTasks,
     confirm: bool = False
-
-
-class CleanupItemResponse(BaseModel):
-    """Single item that can/will be cleaned."""
-    path: str
-    type: str
-    size: int
-    size_human: str
-    description: str
-
-
-class DryRunResponse(BaseModel):
-    """Response from dry run cleanup."""
-    items: list[CleanupItemResponse]
-    total_size: int
-    total_size_human: str
-    protected: list[str]
-    timestamp: str
-
-
-class CleanupResponse(BaseModel):
-    """Response from actual cleanup."""
-    success: bool
-    deleted: list[str]
-    space_freed: int
-    space_freed_human: str
-    errors: list[str]
-    log_path: str
-    timestamp: str
-
-
-@router.get("/cleanup/preview", response_model=DryRunResponse)
-async def preview_cleanup():
+) -> Dict[str, Any]:
     """
-    Preview what would be cleaned.
-    
-    Returns a list of files/directories that would be removed,
-    their sizes, and what is protected.
-    
-    Does NOT modify any files.
+    Execute cleanup. Requires confirm=True.
     """
-    result = dry_run_cleanup()
-    return DryRunResponse(
-        items=[CleanupItemResponse(**item) for item in result["items"]],
-        total_size=result["total_size"],
-        total_size_human=result["total_size_human"],
-        protected=result["protected"],
-        timestamp=result["timestamp"],
-    )
+    if not confirm:
+        raise HTTPException(status_code=400, detail="Confirmation required")
 
+    manager = CleanupManager()
+    
+    # 1. Generate list (re-scan to be safe)
+    preview = manager.preview_cleanup(policy.model_dump())
+    files_to_delete = preview.get("files_to_delete", [])
+    
+    # 2. Execute Local Cleanup immediately (it's fast enough usually, or background it?)
+    # Let's run it synchronously to return immediate results for files
+    local_result = manager.execute_cleanup(files_to_delete)
+    
+    # 3. Trigger Docker Cleanup in Background
+    docker_task_id = None
+    if policy.prune_docker_images:
+        task = prune_docker_resources.delay(deep=policy.prune_docker_volumes)
+        docker_task_id = task.id
 
-@router.post("/cleanup/execute", response_model=CleanupResponse)
-async def execute_cleanup_endpoint(request: CleanupRequest):
-    """
-    Execute cleanup of non-critical data.
-    
-    Requires confirm=True to actually delete.
-    Logs all actions to cleanup.log for audit.
-    
-    Cleans:
-    - Temporary processing files
-    - Previous analysis results (can be regenerated)
-    - Uploaded input files
-    
-    NEVER touches:
-    - Source code
-    - Reference databases
-    - Configuration files
-    """
-    if not request.confirm:
-        raise HTTPException(
-            status_code=400,
-            detail="Cleanup requires confirmation. Set confirm=true to proceed."
-        )
-    
-    result = execute_cleanup(confirm=True)
-    
-    return CleanupResponse(
-        success=result["success"],
-        deleted=result["deleted"],
-        space_freed=result["space_freed"],
-        space_freed_human=result.get("space_freed_human", "0 B"),
-        errors=result.get("errors", []),
-        log_path=result.get("log_path", ""),
-        timestamp=result["timestamp"],
-    )
+    return {
+        "local_cleanup": local_result,
+        "docker_task_id": docker_task_id,
+        "message": "Cleanup initiated"
+    }

@@ -6,13 +6,23 @@ Celery tasks for running analyses with proper database integration.
 
 from datetime import datetime
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import structlog
 from celery import shared_task
+from sqlalchemy import update
 
 from vgap.config import get_settings
-from vgap.models import RunStatus, SampleStatus
+from vgap.models import (
+    RunStatus, 
+    SampleStatus,
+    Run,
+    Sample,
+    QCMetrics,
+    LineageAssignment,
+    Consensus,
+    Variant
+)
 from vgap.pipeline.qc import QCPipeline
 from vgap.pipeline.mapping import ReferenceMapper, PrimerTrimmer, ConsensusGenerator
 from vgap.pipeline.variants import IvarVariantCaller, BcftoolsVariantCaller, VariantAnnotator, VariantFilter
@@ -216,6 +226,12 @@ def process_run(self, run_id: str):
         
         session.commit()
         
+        # Add outputs to provenance
+        for sample in samples:
+            sample_dir = output_dir / sample.sample_id
+            provenance.add_output_file(sample_dir / "mapping" / f"{sample.sample_id}.trimmed.bam", "bam")
+            provenance.add_output_file(sample_dir / "mapping" / "coverage.json", "metrics")
+            
         # =====================================================================
         # STAGE 3: CONSENSUS GENERATION
         # =====================================================================
@@ -245,11 +261,22 @@ def process_run(self, run_id: str):
                     output=consensus_dir / "consensus.fasta",
                 )
                 all_consensus.append(consensus)
+                
+                # CRITICAL FIX: Save stats for DB persistence
+                import json
+                with open(consensus_dir / "consensus_stats.json", "w") as f:
+                    json.dump(consensus.to_dict(), f, indent=2)
+
             except Exception as e:
                 logger.error("Consensus failed", sample_id=sample.sample_id, error=str(e))
         
         session.commit()
         
+        # Add outputs to provenance
+        for sample in samples:
+            sample_dir = output_dir / sample.sample_id
+            provenance.add_output_file(sample_dir / "consensus" / "consensus.fasta", "consensus")
+
         # =====================================================================
         # STAGE 4: VARIANT CALLING
         # =====================================================================
@@ -299,6 +326,12 @@ def process_run(self, run_id: str):
                 logger.error("Variant calling failed", sample_id=sample.sample_id, error=str(e))
         
         session.commit()
+        
+        # Add outputs to provenance
+        for sample in samples:
+            sample_dir = output_dir / sample.sample_id
+            provenance.add_output_file(sample_dir / "variants" / "variants.vcf.gz", "vcf")
+            provenance.add_output_file(sample_dir / "variants" / "variants.json", "variants")
         
         # =====================================================================
         # STAGE 5: LINEAGE ASSIGNMENT
@@ -377,7 +410,7 @@ def process_run(self, run_id: str):
                     "qc": load_json(sample_dir / "qc" / "metrics.json"),
                     "coverage": load_json(sample_dir / "mapping" / "coverage.json"),
                     "variants": load_json(sample_dir / "variants" / "variants.json") or [],
-                    "lineage": load_json(sample_dir / "lineage" / "lineage.json"),
+                    "lineage": (load_json(sample_dir / "lineage" / "lineage.json") or [{}])[0],
                 })
             
             report_pipeline.generate(
@@ -393,6 +426,14 @@ def process_run(self, run_id: str):
         # FINALIZE
         # =====================================================================
         update_progress(session, run.id, 95, "finalizing")
+        
+        # Save results to DB
+        try:
+            save_run_results_to_db(session, run, output_dir)
+        except Exception as e:
+            logger.error("Failed to save results to DB", error=str(e))
+            # Don't fail the pipeline for DB save error, but log it
+
         
         # Save provenance
         provenance.save(output_dir / "provenance.json")
@@ -486,3 +527,96 @@ def generate_report(run_id: str, format: str = "html"):
     report_path = output_dir / f"report.{format}"
     
     return {"report_path": str(report_path)}
+
+def save_run_results_to_db(session, run, output_dir: Path):
+    """Save analysis results from files to database."""
+    from sqlalchemy import delete
+    from vgap.models import QCMetrics, LineageAssignment, Consensus
+    
+    logger.info("Saving results to database", run_id=str(run.id))
+    
+    for sample in run.samples:
+        sample_dir = output_dir / sample.sample_id
+        
+        # 1. QC Metrics
+        qc_path = sample_dir / "qc" / "metrics.json"
+        mapped_qc = load_json(qc_path)
+        cov_path = sample_dir / "mapping" / "coverage.json"
+        mapped_cov = load_json(cov_path) or {}
+        
+        if mapped_qc:
+            # Merge coverage data into QC if separate
+            # Assuming metrics.json has everything or we combine
+            
+            # Clear existing
+            session.execute(delete(QCMetrics).where(QCMetrics.sample_id == sample.id))
+            
+            qc = QCMetrics(
+                id=uuid4(),
+                sample_id=sample.id,
+                raw_reads=mapped_qc.get("raw_reads", 0),
+                raw_bases=mapped_qc.get("raw_bases", 0),
+                trimmed_reads=mapped_qc.get("trimmed_reads", 0),
+                trimmed_bases=mapped_qc.get("trimmed_bases", 0),
+                q20_rate=mapped_qc.get("q20_rate", 0.0),
+                q30_rate=mapped_qc.get("q30_rate", 0.0),
+                gc_content=mapped_qc.get("gc_content", 0.0),
+                duplication_rate=mapped_qc.get("duplication_rate", 0.0),
+                mapped_reads=mapped_qc.get("mapped_reads", 0),
+                mapping_rate=mapped_qc.get("mapping_rate", 0.0),
+                mean_depth=mapped_cov.get("mean_depth", 0.0),
+                median_depth=mapped_cov.get("median_depth", 0.0),
+                coverage_1x=mapped_cov.get("coverage_1x", 0.0),
+                coverage_10x=mapped_cov.get("coverage_10x", 0.0),
+                coverage_30x=mapped_cov.get("coverage_30x", 0.0),
+                coverage_100x=mapped_cov.get("coverage_100x", 0.0),
+                qc_pass=mapped_qc.get("qc_pass", False),
+                qc_flags=mapped_qc.get("qc_flags", {}),
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            session.add(qc)
+            
+        # 2. Lineage
+        lin_path = sample_dir / "lineage" / "lineage.json"
+        lin_data = load_json(lin_path)
+        if lin_data:
+            if isinstance(lin_data, list) and lin_data:
+                lin_data = lin_data[0]
+            
+            session.execute(delete(LineageAssignment).where(LineageAssignment.sample_id == sample.id))
+            
+            lin = LineageAssignment(
+                id=uuid4(),
+                sample_id=sample.id,
+                pangolin_lineage=lin_data.get("pangolin_lineage"),
+                pangolin_version=lin_data.get("pangolin_version"),
+                nextclade_clade=lin_data.get("nextclade_clade"),
+                nextclade_version=lin_data.get("nextclade_version"),
+                confidence_score=0.99 if lin_data.get("nextclade_clade") else 0.0, # Placeholder or extract
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            session.add(lin)
+
+        # 3. Consensus (Optional but good)
+        cons_stats_path = sample_dir / "consensus" / "consensus_stats.json" 
+        cons_data = load_json(cons_stats_path)
+        if cons_data:
+             session.execute(delete(Consensus).where(Consensus.sample_id == sample.id))
+             cons = Consensus(
+                id=uuid4(),
+                sample_id=sample.id,
+                sequence_length=cons_data.get("length", 0),
+                n_count=cons_data.get("n_count", 0),
+                n_percentage=cons_data.get("n_percent", 0.0),
+                fasta_path=str(sample_dir / "consensus" / "consensus.fasta"),
+                fasta_checksum="", # TODO
+                min_depth=10, # TODO from params
+                min_allele_freq=0.5, # TODO
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+             )
+             session.add(cons)
+
+    session.commit()

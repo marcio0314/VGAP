@@ -9,6 +9,7 @@ import RunDetail from './pages/RunDetail'
 import CreateRun from './pages/CreateRun'
 import Reports from './pages/Reports'
 import Admin from './pages/Admin'
+import Maintenance from './pages/Maintenance'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -55,6 +56,7 @@ function App() {
                         <Route path="runs/:id" element={<RunDetail />} />
                         <Route path="reports" element={<Reports />} />
                         <Route path="admin" element={<Admin />} />
+                        <Route path="maintenance" element={<Maintenance />} />
                     </Route>
 
                     {/* Catch all */}

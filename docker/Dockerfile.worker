@@ -27,12 +27,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     samtools \
     bcftools \
     mafft \
+    docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 # Note: ivar is not in apt but consensus calling can use bcftools as fallback
 # Install nextclade (binary)
 RUN cd /tmp && \
-    wget -q https://github.com/nextstrain/nextclade/releases/download/3.1.0/nextclade-x86_64-unknown-linux-gnu -O nextclade && \
+    ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ]; then \
+    NEXTCLADE_URL="https://github.com/nextstrain/nextclade/releases/download/3.1.0/nextclade-aarch64-unknown-linux-gnu"; \
+    else \
+    NEXTCLADE_URL="https://github.com/nextstrain/nextclade/releases/download/3.1.0/nextclade-x86_64-unknown-linux-gnu"; \
+    fi && \
+    wget -q "$NEXTCLADE_URL" -O nextclade && \
     chmod +x nextclade && \
     mv nextclade /usr/local/bin/
 
