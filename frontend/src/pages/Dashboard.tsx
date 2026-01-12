@@ -142,16 +142,20 @@ export default function Dashboard() {
                                     </div>
 
                                     <div className="flex-1 min-w-0">
-                                        <div className="font-medium truncate">{run.name}</div>
+                                        <div className="font-medium truncate">
+                                            {typeof run.name === 'object' ? JSON.stringify(run.name) : run.name}
+                                        </div>
                                         <div className="text-sm text-slate-500">
-                                            {run.run_code} · {run.sample_count} samples
+                                            {typeof run.run_code === 'object' ? JSON.stringify(run.run_code) : run.run_code} · {run.sample_count} samples
                                         </div>
                                     </div>
 
                                     <div className="text-right">
-                                        <div className="text-sm font-medium capitalize">{run.status}</div>
+                                        <div className="text-sm font-medium capitalize">
+                                            {typeof run.status === 'object' ? JSON.stringify(run.status) : run.status}
+                                        </div>
                                         <div className="text-xs text-slate-400">
-                                            {formatDistanceToNow(new Date(run.created_at), { addSuffix: true })}
+                                            {run.created_at ? formatDistanceToNow(new Date(run.created_at), { addSuffix: true }) : ''}
                                         </div>
                                     </div>
 
@@ -211,7 +215,9 @@ function StatCard({ title, value, icon: Icon, color, subtitle }: {
                     <div className="text-sm text-slate-500 mb-1">{title}</div>
                     <div className="text-2xl font-bold">{value}</div>
                     {subtitle && (
-                        <div className="text-xs text-slate-400 mt-1 capitalize">{subtitle}</div>
+                        <div className="text-xs text-slate-400 mt-1 capitalize">
+                            {typeof subtitle === 'object' ? JSON.stringify(subtitle) : subtitle}
+                        </div>
                     )}
                 </div>
                 <div className={`w-10 h-10 rounded-xl ${colors[color]} flex items-center justify-center`}>
@@ -240,7 +246,7 @@ function StatusIndicator({ label, status, subtitle }: {
             <div>
                 <div className="text-sm font-medium">{label}</div>
                 <div className="text-xs text-slate-400 capitalize">
-                    {subtitle || (typeof status === 'string' ? status : JSON.stringify(status))}
+                    {typeof subtitle === 'object' ? JSON.stringify(subtitle) : (subtitle || (typeof status === 'string' ? status : JSON.stringify(status)))}
                 </div>
             </div>
         </div>
