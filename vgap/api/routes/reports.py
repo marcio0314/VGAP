@@ -304,7 +304,8 @@ async def download_export(
         "coverage": ("coverage.bed", "text/plain"),
         "provenance": ("provenance.json", "application/json"),
         "checksums": ("checksums.txt", "text/plain"),
-        "samples_summary": ("samples_summary.tsv", "text/tab-separated-values"),
+        "samples_summary": ("reports/samples_summary.tsv", "text/tab-separated-values"),
+        "report": ("reports/report.html", "text/html"),
     }
     
     if export_type not in export_map:

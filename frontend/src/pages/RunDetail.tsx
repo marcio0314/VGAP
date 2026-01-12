@@ -134,13 +134,22 @@ export default function RunDetail() {
 
                     {run.status === 'completed' && (
                         <>
+                            <a
+                                href={reportsApi.exports(id!, 'report')}
+                                className="btn-success"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <FileText className="w-4 h-4" />
+                                View Report
+                            </a>
                             <button
                                 className="btn-secondary"
                                 onClick={() => generateReportMutation.mutate()}
                                 disabled={generateReportMutation.isPending}
                             >
-                                <FileText className="w-4 h-4" />
-                                Generate Report
+                                <RefreshCw className="w-4 h-4" />
+                                Regenerate
                             </button>
                             <a
                                 href={reportsApi.package(id!)}
@@ -148,7 +157,7 @@ export default function RunDetail() {
                                 download
                             >
                                 <Download className="w-4 h-4" />
-                                Download All
+                                Download Zip
                             </a>
                         </>
                     )}
@@ -169,7 +178,9 @@ export default function RunDetail() {
                             </span>
                             {run.status === 'running' && (
                                 <span className="text-sm text-slate-500">
-                                    {liveStatus.current_stage || run.current_stage || 'Processing...'}
+                                    <span className="text-sm text-slate-500 font-mono">
+                                        {liveStatus.current_stage ? liveStatus.current_stage.toUpperCase().replace('_', ' ') : (run.current_stage || 'Processing...')}
+                                    </span>
                                 </span>
                             )}
                         </div>
@@ -238,8 +249,8 @@ export default function RunDetail() {
                         <button
                             key={tab}
                             className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab
-                                    ? 'border-primary-500 text-primary-600'
-                                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                                ? 'border-primary-500 text-primary-600'
+                                : 'border-transparent text-slate-500 hover:text-slate-700'
                                 }`}
                             onClick={() => setActiveTab(tab)}
                         >
