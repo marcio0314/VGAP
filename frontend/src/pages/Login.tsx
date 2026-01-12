@@ -22,7 +22,8 @@ export default function Login() {
             await login(email, password)
             navigate('/app')
         } catch (err: any) {
-            setError(err.response?.data?.detail || 'Invalid credentials')
+            const detail = err.response?.data?.detail
+            setError(typeof detail === 'string' ? detail : JSON.stringify(detail))
         } finally {
             setIsLoading(false)
         }

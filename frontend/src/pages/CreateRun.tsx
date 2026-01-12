@@ -52,7 +52,8 @@ export default function CreateRun() {
             navigate(`/app/runs/${data.id}`)
         },
         onError: (err: any) => {
-            setError(err.response?.data?.detail || 'Failed to create run')
+            const detail = err.response?.data?.detail
+            setError(typeof detail === 'string' ? detail : JSON.stringify(detail))
         },
     })
 
@@ -232,8 +233,8 @@ export default function CreateRun() {
                             <div className="grid grid-cols-2 gap-4">
                                 <button
                                     className={`p-6 rounded-xl border-2 text-left transition-all ${mode === 'amplicon'
-                                            ? 'border-primary-500 bg-primary-50 dark:bg-primary-500/10'
-                                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-500/10'
+                                        : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
                                         }`}
                                     onClick={() => setMode('amplicon')}
                                 >
@@ -245,8 +246,8 @@ export default function CreateRun() {
 
                                 <button
                                     className={`p-6 rounded-xl border-2 text-left transition-all ${mode === 'shotgun'
-                                            ? 'border-primary-500 bg-primary-50 dark:bg-primary-500/10'
-                                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-500/10'
+                                        : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
                                         }`}
                                     onClick={() => setMode('shotgun')}
                                 >

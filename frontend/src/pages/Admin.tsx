@@ -350,7 +350,8 @@ function CreateUserModal({ onClose, onSuccess }: { onClose: () => void; onSucces
             onClose()
         },
         onError: (err: any) => {
-            setError(err.response?.data?.detail || 'Failed to create user')
+            const detail = err.response?.data?.detail
+            setError(typeof detail === 'string' ? detail : JSON.stringify(detail))
         },
     })
 
