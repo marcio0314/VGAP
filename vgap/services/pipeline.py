@@ -107,9 +107,9 @@ def process_run(self, run_id: str):
                 provenance.add_input_file(Path(sample.r2_path), category="fastq")
         
         # Get reference
-        reference = Path(settings.storage.reference_dir) / "sars-cov-2" / "reference.fasta"
+        reference = Path(settings.storage.references_dir) / "sars-cov-2" / "reference.fasta"
         if run.reference_id:
-            reference = Path(settings.storage.reference_dir) / run.reference_id / "reference.fasta"
+            reference = Path(settings.storage.references_dir) / run.reference_id / "reference.fasta"
         
         # =====================================================================
         # STAGE 1: QC
@@ -168,7 +168,7 @@ def process_run(self, run_id: str):
         provenance.add_software("minimap2", "2.26")
         
         if run.mode == "amplicon" and run.primer_scheme:
-            primer_bed = Path(settings.storage.reference_dir) / "primers" / f"{run.primer_scheme}.bed"
+            primer_bed = Path(settings.storage.references_dir) / "primers" / f"{run.primer_scheme}.bed"
             trimmer = PrimerTrimmer(primer_bed=primer_bed)
             provenance.add_software("ivar", "1.4.2")
         else:
