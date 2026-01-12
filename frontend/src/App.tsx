@@ -29,35 +29,39 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <>{children}</>
 }
 
+import { ErrorBoundary } from './components/ErrorBoundary'
+
 function App() {
     return (
-        <AuthProvider>
-            <Routes>
-                {/* Public routes */}
-                <Route path="/" element={<Landing />} />
-                <Route path="/login" element={<Login />} />
+        <ErrorBoundary>
+            <AuthProvider>
+                <Routes>
+                    {/* Public routes */}
+                    <Route path="/" element={<Landing />} />
+                    <Route path="/login" element={<Login />} />
 
-                {/* Protected routes */}
-                <Route
-                    path="/app"
-                    element={
-                        <ProtectedRoute>
-                            <Layout />
-                        </ProtectedRoute>
-                    }
-                >
-                    <Route index element={<Dashboard />} />
-                    <Route path="runs" element={<Runs />} />
-                    <Route path="runs/new" element={<CreateRun />} />
-                    <Route path="runs/:id" element={<RunDetail />} />
-                    <Route path="reports" element={<Reports />} />
-                    <Route path="admin" element={<Admin />} />
-                </Route>
+                    {/* Protected routes */}
+                    <Route
+                        path="/app"
+                        element={
+                            <ProtectedRoute>
+                                <Layout />
+                            </ProtectedRoute>
+                        }
+                    >
+                        <Route index element={<Dashboard />} />
+                        <Route path="runs" element={<Runs />} />
+                        <Route path="runs/new" element={<CreateRun />} />
+                        <Route path="runs/:id" element={<RunDetail />} />
+                        <Route path="reports" element={<Reports />} />
+                        <Route path="admin" element={<Admin />} />
+                    </Route>
 
-                {/* Catch all */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-        </AuthProvider>
+                    {/* Catch all */}
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+            </AuthProvider>
+        </ErrorBoundary>
     )
 }
 

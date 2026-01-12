@@ -343,15 +343,35 @@ async def ensure_admin_exists(session: AsyncSession) -> User:
     admin_password = os.environ.get("VGAP_ADMIN_PASSWORD")
     
     if not admin_password:
-        # Generate secure random password and log it ONCE
+        # Generate secure random password and write to secure file
         import secrets
+        import os as os_module
         admin_password = secrets.token_urlsafe(16)
-        logger.warning(
-            "No VGAP_ADMIN_PASSWORD set. Generated initial admin password.",
-            password=admin_password,
-            email=admin_email,
-            warning="SAVE THIS PASSWORD - it will not be shown again!"
-        )
+        
+        # Write password to file ONLY (not logs)
+        data_dir = os_module.environ.get("DATA_DIR", "/data")
+        creds_path = os_module.path.join(data_dir, ".admin_credentials")
+        try:
+            os_module.makedirs(data_dir, exist_ok=True)
+            with open(creds_path, "w") as f:
+                f.write(f"ADMIN_EMAIL={admin_email}\n")
+                f.write(f"ADMIN_PASSWORD={admin_password}\n")
+                f.write("# DELETE THIS FILE AFTER FIRST LOGIN\n")
+            os_module.chmod(creds_path, 0o600)
+            logger.warning(
+                "No VGAP_ADMIN_PASSWORD set. Generated initial admin password.",
+                email=admin_email,
+                credentials_file=creds_path,
+                warning="See credentials file for password. DELETE AFTER FIRST LOGIN!"
+            )
+        except Exception as e:
+            # Fallback: still log but obscure
+            logger.warning(
+                "No VGAP_ADMIN_PASSWORD set. Generated initial admin password.",
+                email=admin_email,
+                password_hint=f"{admin_password[:4]}...{admin_password[-4:]}",
+                warning="Could not write credentials file. Password partially shown."
+            )
     
     admin = await create_user(
         session=session,

@@ -469,6 +469,6 @@ async def get_system_status(
         workers=workers,
         workers_active=len(workers),
         disk_usage_percent=round(disk_usage_percent, 1),
-        version=settings.api.version,
+        version=settings.app_version,
         uptime_seconds=0,  # Would need to track app start time
     )

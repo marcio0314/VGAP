@@ -51,48 +51,30 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
 
 
 async def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)],
     session: AsyncSession = Depends(get_session),
 ) -> User:
     """
-    Get current user from JWT token.
+    Get current user - AUTHENTICATION DISABLED.
     
-    Validates token and loads user from database.
-    Raises 401 if token invalid or user not found/inactive.
+    Returns a default admin user for single-user local deployment.
+    No token validation required.
     """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    from uuid import uuid4
+    from vgap.models import UserRole
     
-    try:
-        payload = jwt.decode(
-            token,
-            settings.security.secret_key,
-            algorithms=[settings.security.jwt_algorithm]
-        )
-        user_id_str: str = payload.get("sub")
-        if user_id_str is None:
-            raise credentials_exception
-        
-        user_id = UUID(user_id_str)
-    except (JWTError, ValueError):
-        raise credentials_exception
+    # Return a synthetic admin user object for local single-user mode
+    # This allows all API endpoints to function without authentication
+    class DefaultUser:
+        def __init__(self):
+            self.id = uuid4()
+            self.email = "admin@vgap.local"
+            self.full_name = "VGAP Admin"
+            self.role = UserRole.ADMIN
+            self.is_active = True
+            self.created_at = datetime.utcnow()
+            self.last_login = datetime.utcnow()
     
-    # Load user from database
-    user = await get_user_by_id(session, user_id)
-    
-    if user is None:
-        raise credentials_exception
-    
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is deactivated"
-        )
-    
-    return user
+    return DefaultUser()
 
 
 async def get_current_active_user(

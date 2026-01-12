@@ -45,6 +45,11 @@ class UserRole(str, Enum):
     ADMIN = "admin"
 
 
+class ReportFormat(str, Enum):
+    HTML = "html"
+    PDF = "pdf"
+
+
 # =============================================================================
 # AUTH SCHEMAS
 # =============================================================================
@@ -88,6 +93,14 @@ class UserLogin(BaseModel):
     """Login request."""
     email: EmailStr
     password: str
+
+
+class UserUpdate(BaseModel):
+    """User update request."""
+    full_name: Optional[str] = Field(None, min_length=1, max_length=255)
+    role: Optional[UserRole] = None
+    is_active: Optional[bool] = None
+    password: Optional[str] = Field(None, min_length=8)
 
 
 # =============================================================================
@@ -210,6 +223,9 @@ class RunDetailResponse(RunResponse):
     provenance: Optional[dict[str, Any]] = None
 
 
+
+
+
 class RunStatusUpdate(BaseModel):
     """Run status update."""
     status: RunStatus
@@ -285,6 +301,13 @@ class VariantResponse(BaseModel):
     filter_status: str
 
 
+class VariantListResponse(BaseModel):
+    """List of variants for a sample."""
+    sample_id: UUID
+    total: int
+    variants: list[VariantResponse]
+
+
 class LineageResponse(BaseModel):
     """Lineage assignment response."""
     model_config = ConfigDict(from_attributes=True)
@@ -358,6 +381,18 @@ class ReportRequest(BaseModel):
     include_provenance: bool = True
 
 
+class ReportGenerateRequest(BaseModel):
+    """Request to generate a fresh report."""
+    title: Optional[str] = None
+    format: ReportFormat = ReportFormat.HTML
+    include_figures: bool = True
+    include_tables: bool = True
+    include_provenance: bool = True
+    include_methods: bool = True
+    figure_format: Optional[str] = "svg"
+    figure_dpi: int = 300
+
+
 class ReportResponse(BaseModel):
     """Report response."""
     report_id: UUID
@@ -390,6 +425,43 @@ class PaginatedResponse(BaseModel):
         return self.skip + len(self.items) < self.total
 
 
+class SampleListResponse(PaginatedResponse):
+    """Paginated list of samples."""
+    items: list[SampleResponse]
+
+
+class RunListResponse(PaginatedResponse):
+    """Paginated list of runs."""
+    items: list[RunResponse]
+
+
+class UserListResponse(PaginatedResponse):
+    """Paginated list of users."""
+    users: list[UserResponse]
+
+
+class RunStartResponse(BaseModel):
+    """Run start confirmation."""
+    run_id: UUID
+    status: str
+    message: str
+    validation_passed: bool
+
+
+class ValidationResultResponse(BaseModel):
+    """Results of pre-flight run validation."""
+    passed: bool
+    status: str
+    errors: list[dict[str, Any]]
+    warnings: list[dict[str, Any]]
+    sample_count: int
+
+
+class ProvenanceResponse(Provenance):
+    """Response model for provenance."""
+    pass
+
+
 # =============================================================================
 # HEALTH & METRICS
 # =============================================================================
@@ -410,3 +482,51 @@ class MetricsSummary(BaseModel):
     runs_failed: int
     samples_processed: int
     avg_runtime_seconds: float
+
+
+class DatabaseInfo(BaseModel):
+    """Reference database info."""
+    name: str
+    version: Optional[str]
+    checksum: Optional[str]
+    updated_at: Optional[datetime]
+    updated_by: Optional[str]
+    path: str
+
+
+class DatabaseUpdateResponse(BaseModel):
+    """Database update response."""
+    name: str
+    old_version: Optional[str]
+    new_version: str
+    checksum: str
+    updated_at: datetime
+
+
+class AuditLogEntry(BaseModel):
+    """Single audit log entry."""
+    id: UUID
+    user_id: UUID
+    action: str
+    resource_type: str
+    resource_id: str
+    details: Optional[dict[str, Any]]
+    timestamp: datetime
+    ip_address: Optional[str]
+
+
+class AuditLogResponse(PaginatedResponse):
+    """Audit log response."""
+    entries: list[AuditLogEntry]
+
+
+class SystemStatus(BaseModel):
+    """System health status."""
+    status: str
+    database: str
+    redis: str
+    workers: list[str]
+    workers_active: int
+    disk_usage_percent: float
+    version: str
+    uptime_seconds: float

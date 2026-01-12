@@ -15,7 +15,7 @@ settings = get_settings()
 
 # Create async engine
 engine = create_async_engine(
-    settings.database.url,
+    str(settings.database.url),
     echo=settings.database.echo,
     pool_size=settings.database.pool_size,
     max_overflow=settings.database.max_overflow,

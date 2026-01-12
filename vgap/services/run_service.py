@@ -124,7 +124,7 @@ async def add_sample_to_run(
         batch_id=metadata.get("batch_id", ""),
         is_control=metadata.get("is_control", False),
         control_type=metadata.get("control_type"),
-        metadata=metadata,
+        sample_metadata=metadata,
         created_at=datetime.utcnow(),
     )
     
@@ -356,8 +356,27 @@ async def start_run(
     await update_run_status(session, run_id, RunStatus.QUEUED)
     await session.commit()
     
-    # Queue Celery task
-    process_run.delay(str(run_id))
+    try:
+        # Queue Celery task
+        # Use apply_async to ensure we can catch connection errors
+        process_run.apply_async(args=[str(run_id)], retry=True, retry_policy={
+            'max_retries': 3,
+            'interval_start': 0,
+            'interval_step': 0.2,
+            'interval_max': 0.2,
+        })
+    except Exception as e:
+        logger.error("Failed to queue run task", run_id=str(run_id), error=str(e))
+        
+        # Revert status to FAILED so user knows it didn't start
+        await update_run_status(
+            session, 
+            run_id, 
+            RunStatus.FAILED, 
+            error_message=f"System error: Failed to queue task. {str(e)}"
+        )
+        await session.commit()
+        return False
     
     # Audit log
     audit = AuditLog(

@@ -3,12 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
     Users, Database, Activity, Shield, Plus, Search,
     RefreshCw, CheckCircle, XCircle, ChevronDown, Clock,
-    User, Mail, Calendar, MoreHorizontal, AlertTriangle
+    User, Mail, Calendar, MoreHorizontal, AlertTriangle,
+    Trash2, HardDrive
 } from 'lucide-react'
-import { adminApi } from '../utils/api'
+import { adminApi, maintenanceApi } from '../utils/api'
 import { format, formatDistanceToNow } from 'date-fns'
 
-type Tab = 'users' | 'databases' | 'audit' | 'status'
+type Tab = 'users' | 'databases' | 'audit' | 'status' | 'maintenance'
 
 export default function Admin() {
     const [activeTab, setActiveTab] = useState<Tab>('users')
@@ -24,21 +25,23 @@ export default function Admin() {
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-slate-200 dark:border-slate-700">
+            <div className="flex border-b border-slate-200 dark:border-slate-700 overflow-x-auto">
                 {[
                     { key: 'users', label: 'Users', icon: Users },
                     { key: 'databases', label: 'Databases', icon: Database },
                     { key: 'audit', label: 'Audit Log', icon: Activity },
                     { key: 'status', label: 'System Status', icon: Shield },
+                    { key: 'maintenance', label: 'Maintenance', icon: Trash2 },
                 ].map((tab) => (
                     <button
                         key={tab.key}
-                        className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.key
-                                ? 'border-primary-500 text-primary-600'
-                                : 'border-transparent text-slate-500 hover:text-slate-700'
+                        className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === tab.key
+                            ? 'border-primary-500 text-primary-600'
+                            : 'border-transparent text-slate-500 hover:text-slate-700'
                             }`}
                         onClick={() => setActiveTab(tab.key as Tab)}
                     >
+                        {/* @ts-ignore */}
                         <tab.icon className="w-4 h-4" />
                         {tab.label}
                     </button>
@@ -51,7 +54,172 @@ export default function Admin() {
                 {activeTab === 'databases' && <DatabasesTab />}
                 {activeTab === 'audit' && <AuditLogTab />}
                 {activeTab === 'status' && <SystemStatusTab />}
+                {activeTab === 'maintenance' && <MaintenanceTab />}
             </div>
+        </div>
+    )
+}
+
+function MaintenanceTab() {
+    const [step, setStep] = useState<'preview' | 'confirm' | 'execute'>('preview')
+    const [previewData, setPreviewData] = useState<any>(null)
+    const [cleanupResult, setCleanupResult] = useState<any>(null)
+
+    const previewMutation = useMutation({
+        mutationFn: () => maintenanceApi.preview(),
+        onSuccess: (data) => {
+            setPreviewData(data.data)
+        }
+    })
+
+    const executeMutation = useMutation({
+        mutationFn: () => maintenanceApi.execute(true),
+        onSuccess: (data) => {
+            setCleanupResult(data.data)
+            setStep('execute')
+        }
+    })
+
+    const handlePreview = () => {
+        previewMutation.mutate()
+        setStep('confirm')
+    }
+
+    const formatBytes = (bytes: number) => {
+        if (bytes === 0) return '0 B'
+        const k = 1024
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+        const i = Math.floor(Math.log(bytes) / Math.log(k))
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+    }
+
+    return (
+        <div className="p-6 space-y-8">
+            <div>
+                <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                    <Trash2 className="w-5 h-5 text-slate-500" />
+                    System Cleanup
+                </h2>
+                <p className="text-slate-500 max-w-2xl">
+                    Safely remove temporary files, cached artifacts, and intermediate processing data.
+                    This will NOT delete your source code, reference databases, or active configurations.
+                </p>
+            </div>
+
+            {/* Step 1: Initial State / Preview Button */}
+            {step === 'preview' && (
+                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-8 text-center border border-slate-200 dark:border-slate-700">
+                    <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Trash2 className="w-8 h-8 text-slate-400" />
+                    </div>
+                    <h3 className="font-medium text-lg mb-2">Ready to Clean</h3>
+                    <p className="text-slate-500 mb-6">
+                        Click below to scan for cleanable files. No files will be deleted yet.
+                    </p>
+                    <button
+                        className="btn-primary"
+                        onClick={handlePreview}
+                        disabled={previewMutation.isPending}
+                    >
+                        {previewMutation.isPending ? 'Scanning...' : 'Scan System'}
+                    </button>
+                </div>
+            )}
+
+            {/* Step 2: Confirmation Screen */}
+            {step === 'confirm' && (
+                <div className="space-y-6">
+                    {previewData && (
+                        <div className="grid gap-4">
+                            <div className="flex items-center justify-between p-4 bg-primary-50 dark:bg-primary-500/10 rounded-xl border border-primary-100 dark:border-primary-500/20">
+                                <div className="flex items-center gap-3">
+                                    <HardDrive className="w-5 h-5 text-primary-500" />
+                                    <div>
+                                        <div className="font-medium text-primary-900 dark:text-primary-100">Total reclaimable space</div>
+                                        <div className="text-sm text-primary-700 dark:text-primary-300">
+                                            Found in logs, temp files, and caches
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="text-2xl font-bold text-primary-600 dark:text-primary-400">
+                                    {previewData.total_size_human}
+                                </div>
+                            </div>
+
+                            <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                                <table className="table w-full">
+                                    <thead className="bg-slate-50 dark:bg-slate-800">
+                                        <tr>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-slate-500">Item</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-slate-500">Description</th>
+                                            <th className="px-4 py-3 text-right text-sm font-medium text-slate-500">Size</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                                        {previewData.items.map((item: any) => (
+                                            <tr key={item.path}>
+                                                <td className="px-4 py-3 font-mono text-sm">{item.path}</td>
+                                                <td className="px-4 py-3 text-sm text-slate-500">{item.description}</td>
+                                                <td className="px-4 py-3 text-right text-sm font-medium">{item.size_human}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                                <h4 className="text-sm font-medium text-slate-500 mb-2 uppercase tracking-wider">Protected Assets (Will NOT be touched)</h4>
+                                <div className="flex flex-wrap gap-2">
+                                    {previewData.protected.map((p: string) => (
+                                        <span key={p} className="px-2 py-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-xs font-mono text-slate-500">
+                                            {p}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex gap-3 justify-end pt-4 border-t border-slate-200 dark:border-slate-700">
+                        <button
+                            className="btn-secondary"
+                            onClick={() => setStep('preview')}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            className="btn-danger"
+                            onClick={() => executeMutation.mutate()}
+                            disabled={executeMutation.isPending}
+                        >
+                            {executeMutation.isPending ? 'Cleaning...' : 'Confirm Cleanup'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Step 3: Success Result */}
+            {step === 'execute' && cleanupResult && (
+                <div className="text-center py-12">
+                    <div className="w-16 h-16 bg-success-100 dark:bg-success-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <CheckCircle className="w-8 h-8 text-success-500" />
+                    </div>
+                    <h3 className="font-bold text-xl mb-2">Cleanup Complete</h3>
+                    <p className="text-slate-500 mb-6">
+                        Successfully reclaimed <span className="font-bold text-slate-900 dark:text-white">{cleanupResult.space_freed_human}</span> of disk space.
+                    </p>
+                    <button
+                        className="btn-primary"
+                        onClick={() => {
+                            setStep('preview')
+                            setPreviewData(null)
+                            setCleanupResult(null)
+                        }}
+                    >
+                        Done
+                    </button>
+                </div>
+            )}
         </div>
     )
 }
@@ -131,8 +299,8 @@ function UsersTab() {
                                 </td>
                                 <td>
                                     <span className={`badge ${user.role === 'admin' ? 'badge-danger' :
-                                            user.role === 'analyst' ? 'badge-info' :
-                                                'badge-neutral'
+                                        user.role === 'analyst' ? 'badge-info' :
+                                            'badge-neutral'
                                         }`}>
                                         {user.role}
                                     </span>
@@ -357,9 +525,9 @@ function AuditLogTab() {
                                 <td className="text-sm">{log.user_email || 'System'}</td>
                                 <td>
                                     <span className={`badge ${log.action.includes('create') ? 'badge-success' :
-                                            log.action.includes('delete') ? 'badge-danger' :
-                                                log.action.includes('update') ? 'badge-warning' :
-                                                    'badge-neutral'
+                                        log.action.includes('delete') ? 'badge-danger' :
+                                            log.action.includes('update') ? 'badge-warning' :
+                                                'badge-neutral'
                                         }`}>
                                         {log.action}
                                     </span>
@@ -446,8 +614,8 @@ function StatusCard({ name, status, icon: Icon, detail }: {
 
     return (
         <div className={`p-4 rounded-xl border ${isHealthy
-                ? 'border-success-200 dark:border-success-500/30 bg-success-50 dark:bg-success-500/10'
-                : 'border-danger-200 dark:border-danger-500/30 bg-danger-50 dark:bg-danger-500/10'
+            ? 'border-success-200 dark:border-success-500/30 bg-success-50 dark:bg-success-500/10'
+            : 'border-danger-200 dark:border-danger-500/30 bg-danger-50 dark:bg-danger-500/10'
             }`}>
             <div className="flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isHealthy ? 'bg-success-100 dark:bg-success-500/20' : 'bg-danger-100 dark:bg-danger-500/20'
@@ -456,7 +624,7 @@ function StatusCard({ name, status, icon: Icon, detail }: {
                 </div>
                 <div>
                     <div className="font-medium">{name}</div>
-                    <div className={`text-sm ${isHealthy ? 'text-success-600' : 'text-danger-600'}`}>
+                    <div className="text-sm ${isHealthy ? 'text-success-600' : 'text-danger-600'}">
                         {detail || status}
                     </div>
                 </div>

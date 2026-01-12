@@ -88,6 +88,38 @@ class ReferenceMapper:
         return m
 
 
+class PrimerTrimmer:
+    """Trim amplicon primers from aligned reads using ivar."""
+    
+    def __init__(self, primer_bed: Path):
+        self.primer_bed = primer_bed
+    
+    def trim(self, input_bam: Path, output_bam: Path) -> Path:
+        """Trim primers from BAM file."""
+        logger.info("Trimming primers", input_bam=str(input_bam), primer_bed=str(self.primer_bed))
+        
+        cmd = [
+            "ivar", "trim",
+            "-i", str(input_bam),
+            "-b", str(self.primer_bed),
+            "-p", str(output_bam).replace('.bam', ''),
+            "-e",  # Include reads without primers
+        ]
+        
+        subprocess.run(cmd, check=True, capture_output=True)
+        
+        # Sort and index the output
+        sorted_bam = output_bam
+        subprocess.run([
+            "samtools", "sort",
+            "-o", str(sorted_bam),
+            str(output_bam).replace('.bam', '.bam')
+        ], check=True)
+        subprocess.run(["samtools", "index", str(sorted_bam)], check=True)
+        
+        return sorted_bam
+
+
 class ConsensusGenerator:
     """Generate consensus sequence."""
     

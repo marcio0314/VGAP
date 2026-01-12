@@ -287,6 +287,7 @@ show_status() {
     echo -e "${BOLD}${CYAN}╠══════════════════════════════════════════════════════════════════════╣${NC}"
     echo -e "${CYAN}║${NC}  API:         ${BOLD}http://localhost:8000${NC}                              ${CYAN}║${NC}"
     echo -e "${CYAN}║${NC}  API Docs:    ${BOLD}http://localhost:8000/api/docs${NC}                     ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}  Frontend:    ${BOLD}http://localhost:3001${NC}                              ${CYAN}║${NC}"
     echo -e "${CYAN}║${NC}  Flower:      ${BOLD}http://localhost:5555${NC}                              ${CYAN}║${NC}"
     echo -e "${CYAN}║${NC}  Prometheus:  ${BOLD}http://localhost:9090${NC}                              ${CYAN}║${NC}"
     echo -e "${CYAN}║${NC}  Grafana:     ${BOLD}http://localhost:3000${NC}                              ${CYAN}║${NC}"
@@ -294,6 +295,10 @@ show_status() {
     echo -e "${CYAN}║${NC}  Log file:    $LOG_FILE    ${CYAN}║${NC}"
     echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
+    
+    # Auto-open the frontend in the default browser
+    log "INFO" "Opening frontend in browser..."
+    open "http://localhost:3001" 2>/dev/null || true
 }
 
 show_logs() {

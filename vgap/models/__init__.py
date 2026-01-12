@@ -273,7 +273,7 @@ class Sample(Base, UUIDMixin, TimestampMixin):
     r2_checksum: Mapped[Optional[str]] = mapped_column(String(64))
     
     # Additional metadata stored as JSON
-    metadata: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB)
+    sample_metadata: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB)
     
     # Foreign key
     run_id: Mapped[UUID] = mapped_column(

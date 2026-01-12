@@ -48,7 +48,7 @@ VALIDATION_BLOCKS = Counter(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    logger.info("Starting VGAP API server", version=settings.api.version)
+    logger.info("Starting VGAP API server", version=settings.app_version)
     
     # Initialize database
     await init_db()
@@ -73,7 +73,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="VGAP - Viral Genomics Analysis Platform",
     description="Production-grade platform for viral genome analysis",
-    version=settings.api.version,
+    version=settings.app_version,
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
@@ -187,7 +187,7 @@ async def health_check():
     
     # Redis check
     try:
-        r = redis.from_url(settings.redis.url)
+        r = redis.from_url(str(settings.redis.url))
         r.ping()
         components["redis"] = "healthy"
     except Exception as e:
@@ -210,7 +210,7 @@ async def health_check():
     
     return {
         "status": "healthy" if overall_healthy else "degraded",
-        "version": settings.api.version,
+        "version": settings.app_version,
         "components": components,
         "uptime_seconds": (datetime.utcnow() - APP_START_TIME).total_seconds(),
     }
@@ -246,7 +246,7 @@ async def root():
     """Root endpoint with API information."""
     return {
         "name": "VGAP - Viral Genomics Analysis Platform",
-        "version": settings.api.version,
+        "version": settings.app_version,
         "documentation": "/api/docs",
         "health": "/health",
     }
@@ -269,13 +269,14 @@ async def metrics():
 # INCLUDE ROUTERS
 # ============================================================================
 
-from vgap.api.routes import auth, runs, samples, reports, admin
+from vgap.api.routes import auth, runs, samples, reports, admin, maintenance
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(runs.router, prefix="/api/v1/runs", tags=["Runs"])
 app.include_router(samples.router, prefix="/api/v1/samples", tags=["Samples"])
 app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
+app.include_router(maintenance.router, prefix="/api/v1/maintenance", tags=["Maintenance"])
 
 
 # ============================================================================

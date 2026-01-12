@@ -31,7 +31,7 @@ def get_sync_session():
     from sqlalchemy.orm import sessionmaker
     
     # Convert async URL to sync
-    sync_url = settings.database.url.replace("+asyncpg", "")
+    sync_url = str(settings.database.url).replace("+asyncpg", "")
     engine = create_engine(sync_url)
     Session = sessionmaker(bind=engine)
     return Session()

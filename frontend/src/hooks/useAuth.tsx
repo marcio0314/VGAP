@@ -1,5 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { api } from '../utils/api'
+import { createContext, useContext, useState, ReactNode } from 'react'
 
 interface User {
     id: string
@@ -20,53 +19,31 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-    const [user, setUser] = useState<User | null>(null)
-    const [isLoading, setIsLoading] = useState(true)
-
-    useEffect(() => {
-        // Check for existing token
-        const token = localStorage.getItem('vgap_token')
-        if (token) {
-            fetchUser(token)
-        } else {
-            setIsLoading(false)
-        }
-    }, [])
-
-    async function fetchUser(token: string) {
-        try {
-            api.defaults.headers.common['Authorization'] = `Bearer ${token}`
-            const response = await api.get('/auth/me')
-            setUser(response.data)
-        } catch (error) {
-            localStorage.removeItem('vgap_token')
-            delete api.defaults.headers.common['Authorization']
-        } finally {
-            setIsLoading(false)
-        }
+    // Authentication disabled - always provide a default admin user
+    const defaultUser: User = {
+        id: 'default-user',
+        email: 'admin@vgap.local',
+        full_name: 'VGAP User',
+        role: 'admin',
+        is_active: true,
     }
 
-    async function login(email: string, password: string) {
-        const response = await api.post('/auth/login', { email, password })
-        const { access_token } = response.data
+    const [user] = useState<User | null>(defaultUser)
+    const [isLoading] = useState(false)
 
-        localStorage.setItem('vgap_token', access_token)
-        api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`
-
-        await fetchUser(access_token)
+    async function login(_email: string, _password: string) {
+        // No-op - authentication disabled
     }
 
     function logout() {
-        localStorage.removeItem('vgap_token')
-        delete api.defaults.headers.common['Authorization']
-        setUser(null)
+        // No-op - authentication disabled
     }
 
     return (
         <AuthContext.Provider
             value={{
                 user,
-                isAuthenticated: !!user,
+                isAuthenticated: true, // Always authenticated
                 isLoading,
                 login,
                 logout,
