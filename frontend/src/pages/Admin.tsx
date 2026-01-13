@@ -142,7 +142,7 @@ function MaintenanceTab() {
                                     </div>
                                 </div>
                                 <div className="text-2xl font-bold text-primary-600 dark:text-primary-400">
-                                    {previewData.total_size_human}
+                                    {formatBytes(previewData.total_size_reclaimable || 0)}
                                 </div>
                             </div>
 
@@ -150,17 +150,19 @@ function MaintenanceTab() {
                                 <table className="table w-full">
                                     <thead className="bg-slate-50 dark:bg-slate-800">
                                         <tr>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-slate-500">Item</th>
-                                            <th className="px-4 py-3 text-left text-sm font-medium text-slate-500">Description</th>
+                                            <th className="px-4 py-3 text-left text-sm font-medium text-slate-500">Path</th>
                                             <th className="px-4 py-3 text-right text-sm font-medium text-slate-500">Size</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                                        {previewData.items.map((item: any) => (
+                                        {(previewData.files_to_delete || []).length === 0 ? (
+                                            <tr>
+                                                <td colSpan={2} className="px-4 py-6 text-center text-slate-500">No files to clean up</td>
+                                            </tr>
+                                        ) : (previewData.files_to_delete || []).map((item: any) => (
                                             <tr key={item.path}>
                                                 <td className="px-4 py-3 font-mono text-sm">{item.path}</td>
-                                                <td className="px-4 py-3 text-sm text-slate-500">{item.description}</td>
-                                                <td className="px-4 py-3 text-right text-sm font-medium">{item.size_human}</td>
+                                                <td className="px-4 py-3 text-right text-sm font-medium">{formatBytes(item.size || 0)}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -168,13 +170,9 @@ function MaintenanceTab() {
                             </div>
 
                             <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl">
-                                <h4 className="text-sm font-medium text-slate-500 mb-2 uppercase tracking-wider">Protected Assets (Will NOT be touched)</h4>
-                                <div className="flex flex-wrap gap-2">
-                                    {previewData.protected.map((p: string) => (
-                                        <span key={p} className="px-2 py-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-xs font-mono text-slate-500">
-                                            {p}
-                                        </span>
-                                    ))}
+                                <h4 className="text-sm font-medium text-slate-500 mb-2 uppercase tracking-wider">Policy Used</h4>
+                                <div className="text-xs font-mono text-slate-500">
+                                    {JSON.stringify(previewData.policy_used || {}, null, 2)}
                                 </div>
                             </div>
                         </div>
