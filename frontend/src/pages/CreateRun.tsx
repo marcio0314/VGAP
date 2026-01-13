@@ -5,6 +5,7 @@ import {
     ArrowLeft, ArrowRight, Upload, Dna, Settings,
     CheckCircle, AlertCircle, X, Plus, File
 } from 'lucide-react'
+import ParameterPanel from '../components/ParameterPanel'
 import { runsApi, uploadApi } from '../utils/api'
 
 type Step = 'mode' | 'samples' | 'settings' | 'review'
@@ -58,6 +59,7 @@ export default function CreateRun() {
     })
     const [error, setError] = useState('')
     const [structuredError, setStructuredError] = useState<StructuredError | null>(null)
+    const [runParameters, setRunParameters] = useState<any>(null)
 
     const createRunMutation = useMutation({
         mutationFn: async () => {
@@ -116,10 +118,21 @@ export default function CreateRun() {
             }))
 
             // 3. Create run
+            // 3. Create run
+            // [RECOVERY FIX]: Ensure Single Source of Truth for config
+            // Lift reference_set and sync mode/primer_scheme
+
+            const syncedRunParameters = {
+                ...runParameters,
+                mode: mode,
+                primer_scheme: mode === 'amplicon' ? primerScheme : null,
+            }
+
             const runData = {
                 name: runName,
                 mode,
                 primer_scheme: mode === 'amplicon' ? primerScheme : null,
+                reference_id: runParameters?.reference_set || 'sars-cov-2',
                 upload_session_id: sessionId,
                 samples: samples.map(s => ({
                     r1_filename: s.r1.name,
@@ -136,6 +149,7 @@ export default function CreateRun() {
                         ...s.metadata
                     },
                 })),
+                run_parameters: syncedRunParameters
             }
 
             console.log("Submitting Run Data:", JSON.stringify(runData, null, 2))
@@ -480,20 +494,16 @@ export default function CreateRun() {
                                     value={primerScheme}
                                     onChange={(e) => setPrimerScheme(e.target.value)}
                                 >
-                                    <optgroup label="ARTIC">
-                                        <option value="ARTIC-V5.3.2">ARTIC V5.3.2</option>
+                                    <optgroup label="ARTIC (SARS-CoV-2)">
+                                        <option value="ARTIC-V5.3.2">ARTIC V5.3.2 (Recommended)</option>
                                         <option value="ARTIC-V4.1">ARTIC V4.1</option>
+                                        <option value="ARTIC-V4">ARTIC V4</option>
                                         <option value="ARTIC-V3">ARTIC V3</option>
                                     </optgroup>
-                                    <optgroup label="Midnight">
-                                        <option value="Midnight-1200">Midnight 1200bp</option>
-                                        <option value="Midnight-IDT">Midnight IDT</option>
-                                    </optgroup>
-                                    <optgroup label="Other">
-                                        <option value="swift">Swift Amplicon</option>
-                                        <option value="custom">Custom</option>
-                                    </optgroup>
                                 </select>
+                                <p className="text-xs text-slate-500 mt-1">
+                                    For non-ARTIC workflows (e.g., Influenza), use Shotgun mode instead.
+                                </p>
                             </div>
                         )}
 
@@ -504,6 +514,9 @@ export default function CreateRun() {
                                 placeholder="Notes about this analysis run..."
                             />
                         </div>
+
+
+                        <ParameterPanel mode={mode} onChange={setRunParameters} />
                     </div>
                 )}
 
@@ -575,6 +588,6 @@ export default function CreateRun() {
                     )}
                 </button>
             </div>
-        </div>
+        </div >
     )
 }

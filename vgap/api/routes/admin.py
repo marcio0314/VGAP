@@ -40,66 +40,91 @@ async def list_databases(
     current_user: User = Depends(require_admin),
 ):
     """List all reference databases and their versions."""
+    # Always fetch inventory from disk - single source of truth for AVAILABILITY
+    from vgap.services.reference_manager import ReferenceManager
+    manager = ReferenceManager()
+    inventory = manager.get_inventory()
+
+    # Fetch DB records for INSTALLED status/timestamps
     result = await session.execute(
         select(ReferenceDatabase).order_by(ReferenceDatabase.name)
     )
-    databases = result.scalars().all()
+    db_records = {db.name: db for db in result.scalars().all()}
     
-    # Auto-sync if empty
-    if not databases:
-        from vgap.services.reference_manager import ReferenceManager
-        manager = ReferenceManager()
-        inventory = manager.get_inventory()
-        
-        # Sync References
-        for ref_id, data in inventory.get("references", {}).items():
-            if data["status"] == "installed":
-                db = ReferenceDatabase(
-                    id=uuid4(),
-                    name=data["name"],
-                    version=data["version"],
-                    db_type="reference",
-                    checksum=data.get("checksum"),
-                    path=data["path"],
-                    updated_at=datetime.utcnow(),
-                    updated_by=current_user.id
-                )
-                session.add(db)
-        
-        # Sync Primers
-        for scheme_id, data in inventory.get("primers", {}).items():
-             if data["status"] == "installed":
-                db = ReferenceDatabase(
-                    id=uuid4(),
-                    name=data["name"],
-                    version="latest",
-                    db_type="primer_scheme",
-                    path=data["path"],
-                    checksum=data.get("checksum"),
-                    updated_at=datetime.utcnow(),
-                    updated_by=current_user.id
-                )
-                session.add(db)
-        
+    # Sync: If inventory says "installed" but not in DB, add it
+    updates_made = False
+    
+    # 1. Sync References
+    for ref_id, data in inventory.get("references", {}).items():
+        if data["status"] == "installed" and data["name"] not in db_records:
+            db = ReferenceDatabase(
+                id=uuid4(),
+                name=data["name"],
+                version=data["version"],
+                db_type="reference",
+                checksum=data.get("checksum"),
+                path=data["path"],
+                updated_at=datetime.utcnow(),
+                updated_by=current_user.id
+            )
+            session.add(db)
+            updates_made = True
+
+    # 2. Sync Primers
+    for scheme_id, data in inventory.get("primers", {}).items():
+        if data["status"] == "installed" and data["name"] not in db_records:
+            db = ReferenceDatabase(
+                id=uuid4(),
+                name=data["name"],
+                version="latest",
+                db_type="primer_scheme",
+                path=data["path"],
+                checksum=data.get("checksum"),
+                updated_at=datetime.utcnow(),
+                updated_by=current_user.id
+            )
+            session.add(db)
+            updates_made = True
+    
+    if updates_made:
         await session.commit()
-        
         # Re-fetch
         result = await session.execute(
             select(ReferenceDatabase).order_by(ReferenceDatabase.name)
         )
-        databases = result.scalars().all()
+        db_records = {db.name: db for db in result.scalars().all()}
+
+    # Build Response: Mix Inventory (Available) + DB logic (Version/Time)
+    response = []
     
-    return [
-        DatabaseInfo(
-            name=db.name,
-            version=db.version,
-            checksum=db.checksum,
-            updated_at=db.updated_at,
-            updated_by=str(db.updated_by) if db.updated_by else None,
-            path=db.path,
-        )
-        for db in databases
-    ]
+    # References
+    for ref_id, data in inventory.get("references", {}).items():
+        db_record = db_records.get(data["name"])
+        response.append(DatabaseInfo(
+            name=data["name"],
+            version=data["version"] if data["version"] else "available",
+            checksum=data.get("checksum"),
+            status=data["status"],
+            updated_at=db_record.updated_at if db_record else None,
+            updated_by=str(db_record.updated_by) if db_record and db_record.updated_by else None,
+            path=data["path"],
+            source_url=None # Could map from REPO if needed
+        ))
+
+    # Primers
+    for scheme_id, data in inventory.get("primers", {}).items():
+        db_record = db_records.get(data["name"])
+        response.append(DatabaseInfo(
+            name=data["name"],
+            version="latest",
+            checksum=data.get("checksum"),
+            status=data["status"],
+            updated_at=db_record.updated_at if db_record else None,
+            updated_by=str(db_record.updated_by) if db_record and db_record.updated_by else None,
+            path=data["path"],
+        ))
+        
+    return response
 
 
 @router.get("/databases/inventory")
@@ -137,6 +162,41 @@ async def bootstrap_databases(
         "success": result["success"],
         "message": "Database bootstrap complete" if result["success"] else "Bootstrap completed with errors",
         "details": result,
+    }
+
+
+@router.post("/databases/{ref_id}/bootstrap")
+async def bootstrap_single_database(
+    ref_id: str,
+    current_user: User = Depends(require_admin),
+):
+    """
+    Bootstrap a specific reference database.
+    """
+    from vgap.services.reference_manager import ReferenceManager, DatabaseStatus
+    
+    manager = ReferenceManager()
+    
+    # Check if ref_id is valid
+    inventory = manager.get_inventory()
+    if ref_id not in inventory["references"]:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unknown reference ID: {ref_id}"
+        )
+    
+    result = manager.bootstrap_reference(ref_id)
+    
+    if result.status == DatabaseStatus.ERROR:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Bootstrap failed: {result.error_message}"
+        )
+    
+    return {
+        "success": True,
+        "message": f"Successfully installed {result.name}",
+        "details": result.to_dict(),
     }
 
 

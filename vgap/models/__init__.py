@@ -205,6 +205,8 @@ class Run(Base, UUIDMixin, TimestampMixin):
     
     # Parameters (stored as JSONB for flexibility)
     parameters: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    run_parameters: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB)
+    parameter_audit: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB)
     
     # Execution info
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))

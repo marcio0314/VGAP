@@ -66,10 +66,29 @@ REFERENCE_SOURCES = {
     "sars-cov-2": {
         "name": "SARS-CoV-2 Reference Genome",
         "accession": "NC_045512.2",
-        "fasta_url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=NC_045512.2&rettype=fasta&retmode=text",
-        "gff_url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/009/858/895/GCF_009858895.2_ASM985889v3/GCF_009858895.2_ASM985889v3_genomic.gff.gz",
+        "url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=NC_045512.2&rettype=fasta&retmode=text",
+        "filename": "reference.fasta",
         "expected_length": 29903,
     },
+    "influenza-a": {
+        "name": "Influenza A (H3N2/H1N1 Reference Set)",
+        "accession": "FluA-Ref",
+        "url": "https://ftp.ncbi.nih.gov/genomes/INFLUENZA/influenza_a_ref.fna.gz",
+        "filename": "reference.fasta",
+        "segments": ["PB2", "PB1", "PA", "HA", "NP", "NA", "M", "NS"]
+    },
+    "influenza-b": {
+        "name": "Influenza B Reference Set",
+        "accession": "FluB-Ref",
+        "url": "https://ftp.ncbi.nih.gov/genomes/INFLUENZA/influenza_b_ref.fna.gz", 
+        "filename": "reference.fasta"
+    },
+    "rsv": {
+        "name": "RSV Reference (hRSV/A and hRSV/B)",
+        "accession": "RSV-Ref",
+        "url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/855/545/GCF_000855545.1_ViralProj15064/GCF_000855545.1_ViralProj15064_genomic.fna.gz",
+        "filename": "reference.fasta"
+    }
 }
 
 PRIMER_SCHEMES = {
@@ -214,28 +233,36 @@ class ReferenceManager:
         
         return inventory
     
-    def bootstrap_sars_cov_2(self) -> DatabaseInfo:
+    def bootstrap_reference(self, ref_id: str) -> DatabaseInfo:
         """
-        Bootstrap SARS-CoV-2 reference database.
-        
-        Downloads from NCBI RefSeq:
-        - Reference genome (NC_045512.2)
-        - Gene annotations
+        Bootstrap a reference database by ID.
         """
-        ref_id = "sars-cov-2"
+        if ref_id not in REFERENCE_SOURCES:
+             return DatabaseInfo(
+                name=ref_id,
+                version="unknown",
+                status=DatabaseStatus.ERROR,
+                error_message=f"Unknown reference ID: {ref_id}"
+            )
+
         ref_info = REFERENCE_SOURCES[ref_id]
         ref_dir = self.references_dir / ref_id
         ref_dir.mkdir(parents=True, exist_ok=True)
         
-        fasta_path = ref_dir / "reference.fasta"
+        fasta_path = ref_dir / ref_info["filename"]
         
-        logger.info("Bootstrapping SARS-CoV-2 reference", accession=ref_info["accession"])
+        logger.info("Bootstrapping reference", ref_id=ref_id, url=ref_info["url"])
         
         # Download reference genome
+        # Note: If .gz, we might need to decompress. For now assuming urlretrieve handles it or caller handles it.
+        # Ideally we should unzip if it ends in .gz
+        is_gzipped = ref_info["url"].endswith(".gz")
+        download_path = fasta_path.with_suffix(".gz") if is_gzipped else fasta_path
+        
         if not self._download_file(
-            ref_info["fasta_url"],
-            fasta_path,
-            f"SARS-CoV-2 reference ({ref_info['accession']})"
+            ref_info["url"],
+            download_path,
+            f"{ref_info['name']}"
         ):
             return DatabaseInfo(
                 name=ref_info["name"],
@@ -243,13 +270,32 @@ class ReferenceManager:
                 status=DatabaseStatus.ERROR,
                 error_message="Failed to download reference genome"
             )
+            
+        # Decompress if needed
+        if is_gzipped and download_path.exists():
+             import gzip
+             try:
+                 with gzip.open(download_path, 'rb') as f_in:
+                     with open(fasta_path, 'wb') as f_out:
+                         shutil.copyfileobj(f_in, f_out)
+             except Exception as e:
+                 logger.error("Decompression failed", error=str(e))
+                 return DatabaseInfo(
+                    name=ref_info["name"],
+                    version="unknown",
+                    status=DatabaseStatus.ERROR,
+                    error_message=f"Decompression failed: {str(e)}"
+                )
         
-        # Verify genome length
-        with open(fasta_path) as f:
-            content = f.read()
-            seq_length = len("".join(content.split("\n")[1:]).replace("\n", ""))
+        # Verify genome length if expected
+        seq_length = 0
+        if fasta_path.exists():
+            with open(fasta_path) as f:
+                content = f.read()
+                # fasta parsing is rough here but okay for now
+                seq_length = len("".join([l.strip() for l in content.split("\n") if not l.startswith(">")]))
         
-        if seq_length != ref_info["expected_length"]:
+        if "expected_length" in ref_info and seq_length != ref_info["expected_length"]:
             logger.warning(
                 "Reference length mismatch",
                 expected=ref_info["expected_length"],
@@ -262,8 +308,8 @@ class ReferenceManager:
         # Update manifest
         self.manifest["databases"][ref_id] = {
             "name": ref_info["name"],
-            "version": ref_info["accession"],
-            "accession": ref_info["accession"],
+            "version": ref_info.get("accession", "latest"),
+            "accession": ref_info.get("accession", "latest"),
             "checksum": checksum,
             "length": seq_length,
             "installed_at": datetime.utcnow().isoformat(),
@@ -271,22 +317,19 @@ class ReferenceManager:
         }
         self._save_manifest()
         
-        logger.info(
-            "SARS-CoV-2 reference installed",
-            path=str(fasta_path),
-            length=seq_length,
-            checksum=checksum[:16] + "..."
-        )
-        
         return DatabaseInfo(
             name=ref_info["name"],
-            version=ref_info["accession"],
+            version=ref_info.get("accession", "latest"),
             status=DatabaseStatus.INSTALLED,
             path=fasta_path,
-            source_url=ref_info["fasta_url"],
+            source_url=ref_info["url"],
             checksum=checksum,
             installed_at=datetime.utcnow(),
         )
+
+    def bootstrap_sars_cov_2(self) -> DatabaseInfo:
+        """Backwards compatibility wrapper."""
+        return self.bootstrap_reference("sars-cov-2")
     
     def bootstrap_primer_schemes(self) -> list[DatabaseInfo]:
         """
@@ -353,12 +396,19 @@ class ReferenceManager:
             "errors": [],
         }
         
-        # Bootstrap SARS-CoV-2
-        sars_result = self.bootstrap_sars_cov_2()
-        results["references"]["sars-cov-2"] = sars_result.to_dict()
-        if sars_result.status == DatabaseStatus.ERROR:
-            results["success"] = False
-            results["errors"].append(sars_result.error_message)
+        # Bootstrap References (All)
+        for ref_id in REFERENCE_SOURCES:
+            # We only strictly enforce SARS-CoV-2 auto-bootstrap for now to avoid massive downloads
+            # But the user might want explicitly requested ones.
+            # For now, let's keep behavior: only bootstrap sars-cov-2 by default OR all?
+            # "One-click bootstrap" implies admin action. auto-bootstrap might be too much.
+            # Let's just bootstrap sars-cov-2 to maintain 'bootstrap_all' legacy contract
+            if ref_id == "sars-cov-2":
+                 res = self.bootstrap_reference(ref_id)
+                 results["references"][ref_id] = res.to_dict()
+                 if res.status == DatabaseStatus.ERROR:
+                     results["success"] = False
+                     results["errors"].append(res.error_message)
         
         # Bootstrap primer schemes
         primer_results = self.bootstrap_primer_schemes()

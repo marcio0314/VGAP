@@ -463,21 +463,34 @@ function DatabasesTab() {
                                     <Database className="w-6 h-6 text-primary-500" />
                                 </div>
                                 <div>
-                                    <div className="font-medium">{db.name}</div>
+                                    <div className="font-medium flex items-center gap-2">
+                                        {db.name}
+                                        {db.status === 'not_installed' && (
+                                            <span className="badge-warning text-xs">Not Installed</span>
+                                        )}
+                                        {db.status === 'installed' && (
+                                            <span className="badge-success text-xs">Installed</span>
+                                        )}
+                                    </div>
                                     <div className="text-sm text-slate-500">
-                                        Version: {db.version} · Updated: {formatDistanceToNow(new Date(db.updated_at), { addSuffix: true })}
+                                        Version: {db.version || 'Unknown'}
+                                        {db.updated_at ? (
+                                            <> · Updated: {formatDistanceToNow(new Date(db.updated_at), { addSuffix: true })}</>
+                                        ) : (
+                                            <> · Available for download</>
+                                        )}
                                     </div>
                                 </div>
                             </div>
                             <button
-                                className="btn-secondary"
+                                className={`btn-sm ${db.status === 'not_installed' ? 'btn-primary' : 'btn-secondary'}`}
                                 onClick={() => updateMutation.mutate(db.name)}
                                 disabled={updateMutation.isPending}
                             >
                                 {updateMutation.isPending ? (
                                     <RefreshCw className="w-4 h-4 animate-spin" />
                                 ) : (
-                                    'Update'
+                                    db.status === 'not_installed' ? 'Install' : 'Update'
                                 )}
                             </button>
                         </div>

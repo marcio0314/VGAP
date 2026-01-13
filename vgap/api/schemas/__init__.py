@@ -236,15 +236,7 @@ class SampleDetailResponse(SampleResponse):
 # RUN SCHEMAS
 # =============================================================================
 
-class RunParameters(BaseModel):
-    """Configurable run parameters."""
-    min_depth: int = Field(10, ge=1, le=1000)
-    min_allele_freq: float = Field(0.5, ge=0.0, le=1.0)
-    min_variant_freq: float = Field(0.02, ge=0.0, le=1.0)
-    min_read_length: int = Field(50, ge=20, le=500)
-    min_base_quality: int = Field(20, ge=0, le=40)
-    enable_host_removal: bool = True
-    enable_phylogeny: bool = True
+from vgap.api.schemas.parameters import RunParameters
 
 
 class RunCreate(BaseModel):
@@ -254,7 +246,8 @@ class RunCreate(BaseModel):
     mode: PipelineMode
     primer_scheme: Optional[str] = None
     reference_id: Optional[str] = None
-    parameters: RunParameters = Field(default_factory=RunParameters)
+    run_parameters: Optional[RunParameters] = None
+    parameters: dict[str, Any] = Field(default_factory=dict, description="Legacy parameters")
     samples: list[SampleCreate]
     project_id: Optional[UUID] = None
     upload_session_id: Optional[str] = None
@@ -495,7 +488,8 @@ class DatabaseInfo(BaseModel):
     checksum: Optional[str]
     updated_at: Optional[datetime]
     updated_by: Optional[str]
-    path: str
+    path: Optional[str]  # Was path: str but for uninstalled it is None
+    status: str          # New field for "installed", "not_installed" etc
 
 
 class DatabaseUpdateResponse(BaseModel):

@@ -19,6 +19,7 @@ from vgap.api.schemas import (
     PipelineMode, RunDetailResponse,
 )
 from vgap.config import get_settings
+from vgap.api.schemas.parameters import RunParameters
 from vgap.models import User, Run, RunStatus
 from vgap.services.database import get_session
 from vgap.services.run_service import (
@@ -82,6 +83,7 @@ async def create_new_run(
         primer_scheme=run_data.primer_scheme,
         reference_id=run_data.reference_id,
         parameters=run_data.parameters,
+        run_parameters=run_data.run_parameters,
         project_id=run_data.project_id,
     )
     

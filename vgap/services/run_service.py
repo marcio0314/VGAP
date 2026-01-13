@@ -32,6 +32,7 @@ async def create_run(
     primer_scheme: Optional[str] = None,
     reference_id: Optional[str] = None,
     parameters: Optional[dict] = None,
+    run_parameters: Optional[dict] = None,
     project_id: Optional[UUID] = None,
 ) -> Run:
     """
@@ -60,7 +61,9 @@ async def create_run(
         mode=mode,
         primer_scheme=primer_scheme,
         reference_id=reference_id,
-        parameters=parameters.model_dump() if hasattr(parameters, "model_dump") else (parameters or {}),
+
+        parameters=parameters or {},
+        run_parameters=run_parameters.model_dump() if hasattr(run_parameters, "model_dump") else (run_parameters or {}),
         user_id=user_id,
         project_id=project_id,
         created_at=datetime.utcnow(),

@@ -164,8 +164,22 @@ async def generate_report(
         }
     }
     
+    
     with open(reports_dir / "metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
+    
+    # [RECOVERY FIX] Create 'latest' copy for "View Report" button
+    # The frontend expects reports/run_id/exports/report -> reports/report.html
+    try:
+        import shutil
+        latest_report_path = results_dir / "reports" / "report.html"
+        generated_report = outputs  # outputs is the path returned by pipeline.generate
+        if generated_report and generated_report.exists():
+            shutil.copy2(generated_report, latest_report_path)
+    except Exception as e:
+        # Don't fail the request if copy fails, just log
+        print(f"Failed to update latest report link: {e}")
+
     
     return ReportResponse(
         report_id=report_id,

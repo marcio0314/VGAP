@@ -103,8 +103,22 @@ def process_run(self, run_id: str):
         provenance.run_id = run.id
         provenance.user_id = str(run.user_id)
         provenance.parameters = run.parameters or {}
+        if run.run_parameters:
+            provenance.parameters.update(run.run_parameters)
         provenance.parameters["mode"] = run.mode
         provenance.parameters["primer_scheme"] = run.primer_scheme
+        
+        # Parse Run Parameters
+        params = run.run_parameters or {}
+        
+        # [RECOVERY: SINGLE SOURCE OF TRUTH]
+        # Force overwrite mode/primer_scheme from DB columns to avoid ambiguity
+        # The Run model columns are the canonical source.
+        params["mode"] = run.mode.value if hasattr(run.mode, "value") else run.mode
+        params["primer_scheme"] = run.primer_scheme
+
+        logger.info("Pipeline config resolved", mode=params["mode"], scheme=params["primer_scheme"])
+        print(f"DEBUG: Using parameters: {params}")
         
         # Create output directory
         output_dir = Path(settings.storage.results_dir) / run_id
@@ -128,8 +142,9 @@ def process_run(self, run_id: str):
         logger.info("Running QC pipeline")
         
         qc_pipeline = QCPipeline(
-            min_length=settings.pipeline.min_read_length,
-            min_quality=settings.pipeline.min_base_quality,
+            min_length=params.get("min_length", settings.pipeline.min_read_length),
+            min_quality=params.get("quality_cutoff", settings.pipeline.min_base_quality),
+            adapter_removal=params.get("adapter_removal", True)
         )
         provenance.add_software("fastp", "0.23.4")
         
@@ -174,7 +189,11 @@ def process_run(self, run_id: str):
         update_progress(session, run.id, 30, "mapping")
         logger.info("Running mapping pipeline")
         
-        mapper = ReferenceMapper(reference=reference, threads=settings.resources.worker_cpu_limit)
+        mapper = ReferenceMapper(
+            reference=reference, 
+            threads=settings.resources.worker_cpu_limit,
+            preset=params.get("mapper_preset")
+        )
         provenance.add_software("minimap2", "2.26")
         
         if run.mode == "amplicon" and run.primer_scheme:
@@ -239,8 +258,8 @@ def process_run(self, run_id: str):
         logger.info("Generating consensus sequences")
         
         consensus_gen = ConsensusGenerator(
-            min_depth=settings.pipeline.min_depth,
-            min_af=settings.pipeline.min_allele_freq,
+            min_depth=params.get("min_depth", settings.pipeline.min_depth),
+            min_af=params.get("consensus_min_af", settings.pipeline.min_allele_freq),
         )
         
         all_consensus = []
@@ -283,10 +302,13 @@ def process_run(self, run_id: str):
         update_progress(session, run.id, 55, "variants")
         logger.info("Calling variants")
         
-        # Use BcftoolsVariantCaller for all modes since ivar is unavailable
+        # Use BcftoolsVariantCaller for all modes IF configured, defaulting to ivar for amplicon usually
+        # but sticking to existing logic with param overrides
+        caller_type = params.get("variant_caller", "bcftools")
+        
         caller = BcftoolsVariantCaller(
-            min_depth=settings.pipeline.min_depth,
-            min_freq=settings.pipeline.min_variant_freq
+            min_depth=params.get("min_depth", settings.pipeline.min_depth),
+            min_freq=params.get("min_af", settings.pipeline.min_variant_freq)
         )
         
         annotator = VariantAnnotator()
