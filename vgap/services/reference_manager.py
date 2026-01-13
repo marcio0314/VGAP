@@ -72,21 +72,21 @@ REFERENCE_SOURCES = {
     },
     "influenza-a": {
         "name": "Influenza A (H3N2/H1N1 Reference Set)",
-        "accession": "FluA-Ref",
-        "url": "https://ftp.ncbi.nih.gov/genomes/INFLUENZA/influenza_a_ref.fna.gz",
+        "accession": "NC_007366-NC_007373",  # A/Puerto Rico/8/1934(H1N1) 8 segments
+        "url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=NC_007366,NC_007367,NC_007368,NC_007369,NC_007370,NC_007371,NC_007372,NC_007373&rettype=fasta&retmode=text",
         "filename": "reference.fasta",
         "segments": ["PB2", "PB1", "PA", "HA", "NP", "NA", "M", "NS"]
     },
     "influenza-b": {
         "name": "Influenza B Reference Set",
-        "accession": "FluB-Ref",
-        "url": "https://ftp.ncbi.nih.gov/genomes/INFLUENZA/influenza_b_ref.fna.gz", 
+        "accession": "NC_002204-NC_002211",  # B/Lee/1940 8 segments
+        "url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=NC_002204,NC_002205,NC_002206,NC_002207,NC_002208,NC_002209,NC_002210,NC_002211&rettype=fasta&retmode=text",
         "filename": "reference.fasta"
     },
     "rsv": {
-        "name": "RSV Reference (hRSV/A and hRSV/B)",
-        "accession": "RSV-Ref",
-        "url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/855/545/GCF_000855545.1_ViralProj15064/GCF_000855545.1_ViralProj15064_genomic.fna.gz",
+        "name": "RSV Reference (hRSV/A2)",
+        "accession": "NC_038235.1",
+        "url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=NC_038235.1&rettype=fasta&retmode=text",
         "filename": "reference.fasta"
     }
 }
