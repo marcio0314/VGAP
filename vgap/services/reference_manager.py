@@ -177,6 +177,7 @@ class ReferenceManager:
                     "version": db_info.get("version", "unknown"),
                     "path": str(fasta_path),
                     "installed_at": db_info.get("installed_at"),
+                    "checksum": db_info.get("checksum"),
                 }
             else:
                 inventory["references"][ref_id] = {
@@ -193,11 +194,13 @@ class ReferenceManager:
             bed_path = primers_dir / f"{scheme_id}.bed"
             
             if bed_path.exists():
+                db_info = self.manifest.get("primers", {}).get(scheme_id, {})
                 inventory["primers"][scheme_id] = {
                     "name": scheme_info["name"],
                     "status": "installed",
                     "path": str(bed_path),
                     "amplicon_length": scheme_info["amplicon_length"],
+                    "checksum": db_info.get("checksum"),
                 }
             else:
                 inventory["primers"][scheme_id] = {

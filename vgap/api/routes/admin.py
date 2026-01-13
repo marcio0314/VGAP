@@ -45,6 +45,50 @@ async def list_databases(
     )
     databases = result.scalars().all()
     
+    # Auto-sync if empty
+    if not databases:
+        from vgap.services.reference_manager import ReferenceManager
+        manager = ReferenceManager()
+        inventory = manager.get_inventory()
+        
+        # Sync References
+        for ref_id, data in inventory.get("references", {}).items():
+            if data["status"] == "installed":
+                db = ReferenceDatabase(
+                    id=uuid4(),
+                    name=data["name"],
+                    version=data["version"],
+                    db_type="reference",
+                    checksum=data.get("checksum"),
+                    path=data["path"],
+                    updated_at=datetime.utcnow(),
+                    updated_by=current_user.id
+                )
+                session.add(db)
+        
+        # Sync Primers
+        for scheme_id, data in inventory.get("primers", {}).items():
+             if data["status"] == "installed":
+                db = ReferenceDatabase(
+                    id=uuid4(),
+                    name=data["name"],
+                    version="latest",
+                    db_type="primer_scheme",
+                    path=data["path"],
+                    checksum=data.get("checksum"),
+                    updated_at=datetime.utcnow(),
+                    updated_by=current_user.id
+                )
+                session.add(db)
+        
+        await session.commit()
+        
+        # Re-fetch
+        result = await session.execute(
+            select(ReferenceDatabase).order_by(ReferenceDatabase.name)
+        )
+        databases = result.scalars().all()
+    
     return [
         DatabaseInfo(
             name=db.name,

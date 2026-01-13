@@ -409,6 +409,7 @@ def process_run(self, run_id: str):
                     "sample_id": sample.sample_id,
                     "qc": load_json(sample_dir / "qc" / "metrics.json"),
                     "coverage": load_json(sample_dir / "mapping" / "coverage.json"),
+                    "bam_path": str(sample_dir / "mapping" / f"{sample.sample_id}.trimmed.bam"),
                     "variants": load_json(sample_dir / "variants" / "variants.json") or [],
                     "lineage": (load_json(sample_dir / "lineage" / "lineage.json") or [{}])[0],
                 })

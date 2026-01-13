@@ -103,5 +103,5 @@ export const uploadApi = {
 export const maintenanceApi = {
     usage: () => api.get('/maintenance/usage'),
     preview: (policy: any) => api.post('/maintenance/cleanup/preview', policy),
-    execute: (policy: any, confirm: boolean) => api.post('/maintenance/cleanup/execute', { ...policy, confirm }),
+    execute: (policy: any, confirm: boolean) => api.post('/maintenance/cleanup/execute', policy, { params: { confirm } }),
 }

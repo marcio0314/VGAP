@@ -66,14 +66,14 @@ function MaintenanceTab() {
     const [cleanupResult, setCleanupResult] = useState<any>(null)
 
     const previewMutation = useMutation({
-        mutationFn: () => maintenanceApi.preview(),
+        mutationFn: () => maintenanceApi.preview({}),
         onSuccess: (data) => {
             setPreviewData(data.data)
         }
     })
 
     const executeMutation = useMutation({
-        mutationFn: () => maintenanceApi.execute(true),
+        mutationFn: () => maintenanceApi.execute({}, true),
         onSuccess: (data) => {
             setCleanupResult(data.data)
             setStep('execute')

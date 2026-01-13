@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from vgap.services.cleanup_manager import CleanupManager
 from vgap.tasks.maintenance import prune_docker_resources, scan_docker_usage
 
-router = APIRouter(prefix="/maintenance", tags=["maintenance"])
+router = APIRouter(tags=["maintenance"])
 
 class CleanupPolicy(BaseModel):
     delete_temp_files: bool = True

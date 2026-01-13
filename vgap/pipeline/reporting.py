@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
+import subprocess
 
 import structlog
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -221,6 +222,17 @@ class HTMLReportGenerator:
         th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
         th { background: var(--bg); font-weight: 600; }
         tr:hover { background: var(--bg); }
+        }
+        .figure-container {
+            margin-top: 1rem;
+            text-align: center;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            background: #fff;
+            overflow-x: auto;
+        }
+        .sample-section { margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 2rem; }
         .warning-box {
             background: #fef3c7;
             border-left: 4px solid var(--warning);
@@ -228,14 +240,6 @@ class HTMLReportGenerator:
             margin-bottom: 1rem;
             border-radius: 0 0.5rem 0.5rem 0;
         }
-        .lineage-chart { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
-        .lineage-item {
-            background: var(--bg);
-            padding: 0.5rem 1rem;
-            border-radius: 0.5rem;
-            font-size: 0.85rem;
-        }
-        .lineage-item strong { color: var(--primary); }
         pre {
             background: #1e293b;
             color: #e2e8f0;
@@ -247,6 +251,7 @@ class HTMLReportGenerator:
         @media print {
             .container { max-width: 100%; }
             .card { break-inside: avoid; }
+            .sample-section { break-before: page; }
         }
     </style>
 </head>
@@ -283,97 +288,90 @@ class HTMLReportGenerator:
                     <div class="stat-label">Mean Depth</div>
                 </div>
             </div>
-            
-            {% if warnings %}
-            <div class="warning-box" style="margin-top: 1rem;">
-                <strong>⚠️ Warnings:</strong>
-                <ul>{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul>
-            </div>
-            {% endif %}
         </div>
 
         <!-- Lineage Distribution -->
-        {% if lineage_counts %}
+        {% if figures.lineage_distribution %}
         <div class="card">
             <h2>🧬 Lineage Distribution</h2>
-            <div class="lineage-chart">
+            <div class="figure-container">
+                {{ figures.lineage_distribution | safe }}
+            </div>
+             <div style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem;">
                 {% for lineage, count in lineage_counts.items() %}
-                <div class="lineage-item">
-                    <strong>{{ lineage }}</strong>: {{ count }} sample{% if count != 1 %}s{% endif %}
-                </div>
+                <span class="badge" style="background: var(--bg); border: 1px solid var(--border);">
+                    <strong>{{ lineage }}</strong>: {{ count }}
+                </span>
                 {% endfor %}
             </div>
         </div>
         {% endif %}
 
-        <!-- Sample Results -->
+        <!-- Sample Details -->
         <div class="card">
-            <h2>📋 Sample Results</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Sample ID</th>
-                        <th>QC Status</th>
-                        <th>Mean Depth</th>
-                        <th>Coverage ≥10×</th>
-                        <th>Variants</th>
-                        <th>Lineage</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% for sample in samples %}
-                <tr>
-                    <td><strong>{{ sample.sample_id }}</strong></td>
-                    <td>
-                        {% if sample.qc.qc_pass %}
-                        <span class="badge badge-success">PASS</span>
-                        {% else %}
-                        <span class="badge badge-danger">FAIL</span>
-                        {% endif %}
-                    </td>
-                    <td>{{ "%.1f"|format(sample.coverage.mean_depth|default(0)) }}×</td>
-                    <td>{{ "%.1f"|format((sample.coverage.coverage_10x|default(0)) * 100) }}%</td>
-                    <td>{{ sample.variant_count }}</td>
-                    <td>{{ sample.lineage.pangolin_lineage|default(sample.lineage.nextclade_clade)|default('—') if sample.lineage else '—' }}</td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Methods -->
-        {% if provenance %}
-        <div class="card">
-            <h2>📖 Methods</h2>
-            <p>Analysis performed using the VGAP pipeline with the following software:</p>
-            <table>
-                <thead><tr><th>Software</th><th>Version</th></tr></thead>
-                <tbody>
-                {% for sw in provenance.software %}
-                <tr><td>{{ sw.name }}</td><td>{{ sw.version }}</td></tr>
-                {% endfor %}
-                </tbody>
-            </table>
+            <h2>Microbial Genomics Report</h2>
             
-            <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem;">Parameters</h3>
-            <pre>{{ provenance.parameters | tojson(indent=2) }}</pre>
+            {% for sample in samples %}
+            <div class="sample-section">
+                <h3 style="margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between;">
+                    Sample: {{ sample.sample_id }}
+                    {% if sample.qc.qc_pass %}
+                    <span class="badge badge-success">PASS</span>
+                    {% else %}
+                    <span class="badge badge-danger">FAIL</span>
+                    {% endif %}
+                </h3>
+
+                <div class="grid">
+                    <div>
+                        <strong>Lineage:</strong> {{ sample.lineage.pangolin_lineage|default(sample.lineage.nextclade_clade)|default('Unassigned') if sample.lineage else 'Unassigned' }}<br>
+                        <strong>Coverage:</strong> {{ "%.1f"|format(sample.coverage.mean_depth|default(0)) }}×<br>
+                        <strong>Genome Cov (10x):</strong> {{ "%.1f"|format((sample.coverage.coverage_10x|default(0)) * 100) }}%
+                    </div>
+                    <div>
+                        <strong>Raw Reads:</strong> {{ sample.qc.raw_reads }}<br>
+                        <strong>Mapped Reads:</strong> {{ sample.qc.mapped_reads }} ({{ "%.1f"|format(sample.qc.mapping_rate|default(0)*100) }}%)<br>
+                        <strong>Variants:</strong> {{ sample.variant_count }}
+                    </div>
+                </div>
+
+                <!-- Coverage Plot -->
+                {% if figures[sample.sample_id + '_coverage'] %}
+                <div class="figure-container">
+                    <h4>Genome Coverage</h4>
+                    {{ figures[sample.sample_id + '_coverage'] | safe }}
+                </div>
+                {% endif %}
+
+                <!-- Variant Plot -->
+                {% if figures[sample.sample_id + '_variants'] %}
+                <div class="figure-container">
+                    <h4>Variant Map</h4>
+                    {{ figures[sample.sample_id + '_variants'] | safe }}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
         </div>
-        {% endif %}
 
         <!-- Provenance -->
         {% if provenance %}
         <div class="card">
-            <h2>🔍 Provenance</h2>
-            <p><strong>Run ID:</strong> {{ provenance.run_id }}</p>
-            <p><strong>Timestamp:</strong> {{ provenance.timestamp }}</p>
-            
-            {% if provenance.random_seeds %}
-            <h3 style="margin-top: 1rem;">Random Seeds</h3>
-            <pre>{{ provenance.random_seeds | tojson(indent=2) }}</pre>
-            {% endif %}
-            
-            <h3 style="margin-top: 1rem;">Output Checksums</h3>
-            <pre>{{ provenance.outputs | tojson(indent=2) }}</pre>
+            <h2>🔍 Analysis Provenance</h2>
+            <div class="grid">
+                <div>
+                    <strong>Run ID:</strong> {{ provenance.run_id }}<br>
+                    <strong>Timestamp:</strong> {{ provenance.timestamp }}
+                </div>
+                <div>
+                     <h3>Software Versions</h3>
+                     <ul>
+                     {% for sw in provenance.software %}
+                        <li>{{ sw.name }} {{ sw.version }}</li>
+                     {% endfor %}
+                     </ul>
+                </div>
+            </div>
         </div>
         {% endif %}
 
@@ -400,6 +398,7 @@ class HTMLReportGenerator:
         data: ReportData,
         output_path: Path,
         config: Optional[ReportConfig] = None,
+        extra_context: Optional[dict[str, Any]] = None,
     ) -> Path:
         """Generate HTML report."""
         config = config or ReportConfig()
@@ -408,6 +407,8 @@ class HTMLReportGenerator:
         
         context = data.to_dict()
         context["title"] = config.title
+        if extra_context:
+            context.update(extra_context)
         
         html = template.render(**context)
         
@@ -418,16 +419,14 @@ class HTMLReportGenerator:
 
 
 class FigureGenerator:
-    """Generate publication-quality figures using Plotly."""
+    """Generate interactive Plotly figures as HTML strings."""
     
-    def __init__(self, output_dir: Path, format: str = "svg", dpi: int = 300):
-        self.output_dir = output_dir
-        self.format = format
-        self.dpi = dpi
-        output_dir.mkdir(parents=True, exist_ok=True)
+    def __init__(self):
+        # We don't need output_dir for HTML embedding
+        pass
     
-    def coverage_plot(self, depths: list[int], sample_id: str) -> Path:
-        """Generate per-base coverage plot."""
+    def coverage_plot(self, depths: list[int], sample_id: str) -> Optional[str]:
+        """Generate per-base coverage plot as HTML string."""
         try:
             import plotly.graph_objects as go
             
@@ -438,6 +437,7 @@ class FigureGenerator:
                 fill='tozeroy',
                 line=dict(color='#2563eb', width=1),
                 fillcolor='rgba(37, 99, 235, 0.3)',
+                name='Depth'
             ))
             
             # Add threshold lines
@@ -452,19 +452,16 @@ class FigureGenerator:
                 yaxis_title="Depth",
                 template="plotly_white",
                 height=400,
+                margin=dict(l=40, r=40, t=40, b=40),
             )
             
-            output_path = self.output_dir / f"{sample_id}_coverage.{self.format}"
-            
-            if self.format == "svg":
-                fig.write_image(str(output_path), format="svg")
-            else:
-                fig.write_image(str(output_path), format="png", scale=self.dpi / 72)
-            
-            return output_path
+            return fig.to_html(full_html=False, include_plotlyjs='cdn')
             
         except ImportError:
             logger.warning("Plotly not available, skipping figure generation")
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to generate coverage plot: {str(e)}")
             return None
     
     def variant_lollipop(
@@ -472,8 +469,8 @@ class FigureGenerator:
         variants: list[dict],
         genome_length: int,
         sample_id: str,
-    ) -> Path:
-        """Generate variant lollipop plot."""
+    ) -> Optional[str]:
+        """Generate variant lollipop plot as HTML string."""
         try:
             import plotly.graph_objects as go
             
@@ -489,6 +486,7 @@ class FigureGenerator:
                     marker=dict(size=10, color='#2563eb'),
                     name='Consensus',
                     text=[v.get("aa_change", f"{v['ref']}>{v['alt']}") for v in consensus],
+                    hovertemplate="Pos: %{x}<br>AF: %{y:.2f}<br>%{text}"
                 ))
             
             # Minor variants
@@ -500,6 +498,7 @@ class FigureGenerator:
                     mode='markers',
                     marker=dict(size=6, color='#ca8a04', symbol='diamond'),
                     name='Minor',
+                    hovertemplate="Pos: %{x}<br>AF: %{y:.2f}"
                 ))
             
             fig.update_layout(
@@ -507,22 +506,23 @@ class FigureGenerator:
                 xaxis_title="Genome Position",
                 yaxis_title="Allele Frequency",
                 xaxis=dict(range=[0, genome_length]),
-                yaxis=dict(range=[0, 1]),
+                yaxis=dict(range=[0, 1.1]),
                 template="plotly_white",
                 height=300,
+                margin=dict(l=40, r=40, t=40, b=40),
             )
             
-            output_path = self.output_dir / f"{sample_id}_variants.{self.format}"
-            fig.write_image(str(output_path), format=self.format)
-            
-            return output_path
+            return fig.to_html(full_html=False, include_plotlyjs=False) 
+            # include_plotlyjs=False because coverage plot likely already included it if generated first?
+            # Or use 'cdn' for all. Duplicate script tags are usually handled by browser or Plotly.
+            # Safe to use 'cdn' for all to ensure at least one loads.
             
         except Exception as e:
             logger.warning("Failed to generate variant chart", error=str(e))
             return None
     
-    def lineage_pie(self, lineage_counts: dict[str, int]) -> Path:
-        """Generate lineage distribution pie chart."""
+    def lineage_pie(self, lineage_counts: dict[str, int]) -> Optional[str]:
+        """Generate lineage distribution pie chart as HTML string."""
         try:
             import plotly.graph_objects as go
             
@@ -535,12 +535,10 @@ class FigureGenerator:
             fig.update_layout(
                 title="Lineage Distribution",
                 template="plotly_white",
+                height=400,
             )
             
-            output_path = self.output_dir / f"lineage_distribution.{self.format}"
-            fig.write_image(str(output_path), format=self.format)
-            
-            return output_path
+            return fig.to_html(full_html=False, include_plotlyjs='cdn')
             
         except Exception as e:
             logger.warning("Failed to generate lineage chart", error=str(e))
@@ -553,8 +551,42 @@ class ReportPipeline:
     def __init__(self, output_dir: Path):
         self.output_dir = output_dir
         self.html_generator = HTMLReportGenerator()
-        self.figure_generator = FigureGenerator(output_dir / "figures")
-    
+        self.figure_generator = FigureGenerator()
+
+    def _embed_image(self, path: Path) -> str:
+        """Read image and return base64 data URI."""
+        import base64
+        if not path or not path.exists():
+            return ""
+        
+        mime = "image/svg+xml" if path.suffix == ".svg" else "image/png"
+        with open(path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("utf-8")
+        return f"data:{mime};base64,{encoded}"
+
+    def _get_depths(self, bam_path: str) -> list[int]:
+        """Extract per-base depth from BAM file using samtools."""
+        if not bam_path or not Path(bam_path).exists():
+            return []
+            
+        try:
+            # -a: output all positions (including 0 depth)
+            cmd = ["samtools", "depth", "-a", bam_path]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            
+            # Format: chrom pos depth
+            depths = []
+            for line in result.stdout.strip().split('\n'):
+                if line:
+                     parts = line.split('\t')
+                     if len(parts) >= 3:
+                         depths.append(int(parts[2]))
+            return depths
+            
+        except Exception as e:
+            logger.warning("Failed to extract depths from BAM", bam=bam_path, error=str(e))
+            return []
+
     def generate(
         self,
         run_id: str,
@@ -571,30 +603,70 @@ class ReportPipeline:
         data = ReportData(run_id)
         data.provenance = provenance
         
+        # Figures dictionary for embedding (sample_id_type -> base64)
+        figures = {}
+        
         for sample in samples_data:
+            sample_id = sample["sample_id"]
+            
             data.add_sample(
-                sample_id=sample["sample_id"],
+                sample_id=sample_id,
                 qc_metrics=sample.get("qc", {}),
                 coverage=sample.get("coverage", {}),
                 variants=sample.get("variants", []),
                 lineage=sample.get("lineage"),
             )
-        
+            
+            # Use bam_path passed from pipeline if available
+            bam_path = sample.get("bam_path")
+            
+            if config.include_figures:
+                # 1. Coverage Plot
+                # Check if we have depths in coverage (unlikely from JSON) or need to get from BAM
+                depths = sample.get("coverage", {}).get("depths")
+                if not depths and bam_path:
+                    depths = self._get_depths(bam_path)
+                
+                if depths:
+                    # cov_fig is now HTML string
+                    cov_fig = self.figure_generator.coverage_plot(depths, sample_id)
+                    if cov_fig:
+                        # Store HTML string directly
+                        figures[f"{sample_id}_coverage"] = cov_fig
+                
+                # 2. Variants Lollipop
+                variants = sample.get("variants", [])
+                # Estimate genome length from depths if available, else default (SARS-CoV-2 ~30k)
+                genome_len = len(depths) if depths else 30000 
+                
+                if variants:
+                    var_fig = self.figure_generator.variant_lollipop(variants, genome_len, sample_id)
+                    if var_fig:
+                         figures[f"{sample_id}_variants"] = var_fig
+
+
         data.compute_summaries()
         
         outputs = {}
         
+        # Generate Aggregate Figures
+        # Generate Aggregate Figures
+        if config.include_figures and data.lineage_counts:
+            lin_fig = self.figure_generator.lineage_pie(data.lineage_counts)
+            if lin_fig:
+                # Save lineage chart as separate HTML
+                lin_path = self.output_dir / "figures" / "lineage_distribution.html"
+                lin_path.parent.mkdir(exist_ok=True, parents=True)
+                lin_path.write_text(lin_fig)
+                outputs["lineage_chart"] = lin_path
+                
+                # Embed HTML string directly
+                figures["lineage_distribution"] = lin_fig
+        
         # Generate HTML report
         html_path = self.output_dir / "report.html"
-        self.html_generator.generate(data, html_path, config)
+        self.html_generator.generate(data, html_path, config, extra_context={"figures": figures})
         outputs["html"] = html_path
-        
-        # Generate figures
-        if config.include_figures:
-            if data.lineage_counts:
-                fig = self.figure_generator.lineage_pie(data.lineage_counts)
-                if fig:
-                    outputs["lineage_chart"] = fig
         
         # Export data tables
         samples_tsv = self.output_dir / "samples_summary.tsv"
