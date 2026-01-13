@@ -67,11 +67,28 @@ async def create_new_run(
     separately via the upload endpoint before starting the run.
     """
     # Validate mode-specific requirements
-    if run_data.mode == PipelineMode.AMPLICON and not run_data.primer_scheme:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Primer scheme required for amplicon mode"
-        )
+    if run_data.mode == PipelineMode.AMPLICON:
+        if not run_data.primer_scheme:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Primer scheme required for amplicon mode"
+            )
+        # D2 FIX: Validate primer scheme exists in allowed list
+        from vgap.validators.preflight import AmpliconValidator
+        if run_data.primer_scheme not in AmpliconValidator.KNOWN_SCHEMES:
+            allowed_schemes = [s for s in AmpliconValidator.KNOWN_SCHEMES.keys() 
+                              if s.startswith("ARTIC-")]  # Show only standard hyphenated names
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid primer scheme '{run_data.primer_scheme}'. "
+                       f"Allowed schemes: {', '.join(sorted(allowed_schemes))}"
+            )
+    elif run_data.mode == PipelineMode.SHOTGUN:
+        # Shotgun mode should not have primer scheme (or null)
+        if run_data.primer_scheme and run_data.primer_scheme != "null":
+            # Reset to null for shotgun - primer trimming is not applicable
+            run_data.primer_scheme = None
+
     
     # Create run
     run = await create_run(
