@@ -316,9 +316,7 @@ function UsersTab() {
                                     {format(new Date(user.created_at), 'MMM d, yyyy')}
                                 </td>
                                 <td>
-                                    <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">
-                                        <MoreHorizontal className="w-4 h-4" />
-                                    </button>
+                                    <UserActions user={user} onRefresh={refetch} />
                                 </td>
                             </tr>
                         ))}
@@ -521,7 +519,7 @@ function AuditLogTab() {
                         {logs.map((log: any) => (
                             <tr key={log.id}>
                                 <td className="text-sm">
-                                    {format(new Date(log.created_at), 'MMM d, HH:mm:ss')}
+                                    {format(new Date(log.timestamp), 'MMM d, HH:mm:ss')}
                                 </td>
                                 <td className="text-sm">{log.user_email || 'System'}</td>
                                 <td>
@@ -535,7 +533,7 @@ function AuditLogTab() {
                                 </td>
                                 <td className="text-sm font-mono">{log.resource_type}</td>
                                 <td className="text-sm text-slate-500 truncate max-w-xs">
-                                    {log.details || '-'}
+                                    {log.details ? JSON.stringify(log.details) : '-'}
                                 </td>
                             </tr>
                         ))}
@@ -605,6 +603,55 @@ function SystemStatusTab() {
     )
 }
 
+function UserActions({ user, onRefresh }: { user: any; onRefresh: () => void }) {
+    const [open, setOpen] = useState(false)
+
+    const deactivateMutation = useMutation({
+        mutationFn: () => adminApi.deactivateUser(user.id),
+        onSuccess: () => {
+            onRefresh()
+            setOpen(false)
+        },
+    })
+
+    return (
+        <div className="relative">
+            <button
+                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                onClick={() => setOpen(!open)}
+            >
+                <MoreHorizontal className="w-4 h-4" />
+            </button>
+
+            {open && (
+                <>
+                    <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setOpen(false)}
+                    />
+                    <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-elevated border border-slate-200 dark:border-slate-700 z-20 py-1">
+                        {user.is_active && (
+                            <button
+                                className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 w-full text-left text-danger-600"
+                                onClick={() => deactivateMutation.mutate()}
+                                disabled={deactivateMutation.isPending}
+                            >
+                                <XCircle className="w-4 h-4" />
+                                {deactivateMutation.isPending ? 'Deactivating...' : 'Deactivate User'}
+                            </button>
+                        )}
+                        {!user.is_active && (
+                            <div className="px-4 py-2 text-sm text-slate-400">
+                                User is already inactive
+                            </div>
+                        )}
+                    </div>
+                </>
+            )}
+        </div>
+    )
+}
+
 function StatusCard({ name, status, icon: Icon, detail }: {
     name: string
     status: string
@@ -640,3 +687,4 @@ function StatusCard({ name, status, icon: Icon, detail }: {
         </div>
     )
 }
+

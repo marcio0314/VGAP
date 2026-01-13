@@ -441,7 +441,7 @@ class RunListResponse(PaginatedResponse):
 
 class UserListResponse(PaginatedResponse):
     """Paginated list of users."""
-    users: list[UserResponse]
+    items: list[UserResponse]
 
 
 class RunStartResponse(BaseModel):
@@ -521,7 +521,7 @@ class AuditLogEntry(BaseModel):
 
 class AuditLogResponse(PaginatedResponse):
     """Audit log response."""
-    entries: list[AuditLogEntry]
+    items: list[AuditLogEntry]
 
 
 class SystemStatus(BaseModel):

@@ -286,7 +286,7 @@ async def get_audit_log(
     entries = result.scalars().all()
     
     return AuditLogResponse(
-        entries=[
+        items=[
             AuditLogEntry(
                 id=e.id,
                 user_id=e.user_id,
@@ -326,7 +326,7 @@ async def list_all_users(
     )
     
     return UserListResponse(
-        users=[
+        items=[
             UserResponse(
                 id=u.id,
                 email=u.email,
