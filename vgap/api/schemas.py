@@ -402,9 +402,9 @@ class ReportResponse(BaseModel):
     report_id: UUID
     run_id: UUID
     format: str
-    file_path: str
     generated_at: datetime
-    checksum: str
+    download_url: Optional[str] = None
+    expires_at: Optional[datetime] = None
 
 
 # =============================================================================

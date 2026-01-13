@@ -77,12 +77,16 @@ class ReportData:
         lineage: Optional[dict] = None,
     ):
         """Add sample data to report."""
+        # Normalize lineage to dict (it may come as list from JSON)
+        if isinstance(lineage, list):
+            lineage = lineage[0] if lineage else None
+        
         self.samples.append({
             "sample_id": sample_id,
             "qc": qc_metrics,
             "coverage": coverage,
             "variant_count": len(variants),
-            "lineage": lineage,
+            "lineage": lineage if isinstance(lineage, dict) else None,
         })
         self.total_samples += 1
         
@@ -105,10 +109,14 @@ class ReportData:
         
         # Lineage counts
         for s in self.samples:
-            lineage = s.get("lineage", {})
+            lineage = s.get("lineage")
             if lineage:
-                lin = lineage.get("pangolin_lineage") or lineage.get("nextclade_clade") or "Unknown"
-                self.lineage_counts[lin] = self.lineage_counts.get(lin, 0) + 1
+                # Handle lineage as list or dict
+                if isinstance(lineage, list):
+                    lineage = lineage[0] if lineage else {}
+                if isinstance(lineage, dict):
+                    lin = lineage.get("pangolin_lineage") or lineage.get("nextclade_clade") or "Unknown"
+                    self.lineage_counts[lin] = self.lineage_counts.get(lin, 0) + 1
     
     def to_dict(self) -> dict[str, Any]:
         """Export as dictionary for template rendering."""
@@ -605,12 +613,17 @@ class ReportPipeline:
             f.write('\t'.join(headers) + '\n')
             
             for s in data.samples:
+                lineage = s.get("lineage")
+                # Handle lineage as list or dict
+                if isinstance(lineage, list):
+                    lineage = lineage[0] if lineage else {}
+                lineage_str = lineage.get("pangolin_lineage", "") if isinstance(lineage, dict) else ""
                 row = [
                     s["sample_id"],
                     str(s["qc"].get("qc_pass", False)),
                     f"{s['coverage'].get('mean_depth', 0):.1f}",
                     f"{s['coverage'].get('coverage_10x', 0):.3f}",
                     str(s.get("variant_count", 0)),
-                    s["lineage"].get("pangolin_lineage", "") if s.get("lineage") else "",
+                    lineage_str,
                 ]
                 f.write('\t'.join(row) + '\n')
