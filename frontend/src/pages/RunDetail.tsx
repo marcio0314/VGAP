@@ -24,6 +24,7 @@ const sampleStatusConfig: Record<string, { color: string; text: string }> = {
     qc_complete: { color: 'text-primary-500', text: 'QC Complete' },
     mapping_complete: { color: 'text-primary-500', text: 'Mapping' },
     variants_complete: { color: 'text-primary-500', text: 'Variants' },
+    complete: { color: 'text-success-500', text: 'Completed' },
     completed: { color: 'text-success-500', text: 'Completed' },
     failed: { color: 'text-danger-500', text: 'Failed' },
 }
@@ -379,7 +380,7 @@ function SampleDetails({ sample, runId }: { sample: any; runId: string }) {
     const { data: qcData } = useQuery({
         queryKey: ['sample-qc', sample.id],
         queryFn: () => samplesApi.qc(sample.id),
-        enabled: sample.status === 'completed',
+        enabled: sample.status === 'completed' || sample.status === 'complete',
     })
 
     const qc = qcData?.data || {}

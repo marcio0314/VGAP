@@ -94,8 +94,10 @@ async def get_sample_qc(
     """
     Get QC metrics for a sample.
     
-    Loads metrics from the results directory.
+    Loads metrics from the database.
     """
+    from vgap.models import QCMetrics as QCMetricsModel
+    
     sample = await get_sample_by_id(session, sample_id)
     
     if not sample:
@@ -104,20 +106,35 @@ async def get_sample_qc(
             detail=f"Sample {sample_id} not found"
         )
     
-    results_dir = Path(settings.storage.results_dir) / str(sample.run_id) / sample.sample_id
-    qc_path = results_dir / "qc" / "metrics.json"
+    # Read from database
+    result = await session.execute(
+        select(QCMetricsModel).where(QCMetricsModel.sample_id == sample_id)
+    )
+    qc_metrics = result.scalar_one_or_none()
     
-    if not qc_path.exists():
+    if not qc_metrics:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="QC metrics not available for this sample"
         )
     
-    import json
-    with open(qc_path) as f:
-        metrics = json.load(f)
-    
-    return QCMetricsResponse(**metrics)
+    return QCMetricsResponse(
+        raw_reads=qc_metrics.raw_reads,
+        raw_bases=qc_metrics.raw_bases,
+        trimmed_reads=qc_metrics.trimmed_reads,
+        trimmed_bases=qc_metrics.trimmed_bases,
+        q20_rate=qc_metrics.q20_rate,
+        q30_rate=qc_metrics.q30_rate,
+        gc_content=qc_metrics.gc_content,
+        duplication_rate=qc_metrics.duplication_rate,
+        mapped_reads=qc_metrics.mapped_reads,
+        mapping_rate=qc_metrics.mapping_rate,
+        mean_depth=qc_metrics.mean_depth,
+        coverage_10x=qc_metrics.coverage_10x,
+        coverage_30x=qc_metrics.coverage_30x,
+        qc_pass=qc_metrics.qc_pass,
+        qc_flags=qc_metrics.qc_flags or [],
+    )
 
 
 @router.get("/{sample_id}/variants", response_model=VariantListResponse)
